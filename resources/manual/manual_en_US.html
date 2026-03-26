@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Traffic Analysis & Anomaly Detection System - User Manual</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background-color: #f5f7fa;
+            color: #1e2b3c;
+            line-height: 1.6;
+            padding: 30px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-radius: 18px;
+            overflow: hidden;
+            padding: 30px 40px;
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 600;
+            border-left: 8px solid #0078d7;
+            padding-left: 20px;
+            margin-bottom: 10px;
+            color: #0a2c3e;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #3498db;
+        }
+
+        .feature-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .subhead {
+            color: #4a6fa5;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+            border-bottom: 1px solid #e0e6ed;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-top: 40px;
+            margin-bottom: 16px;
+            font-weight: 500;
+            background: linear-gradient(90deg, #f0f4fc, transparent);
+            padding: 8px 15px;
+            border-radius: 40px 0 0 40px;
+            border-left: 5px solid #0078d7;
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            margin: 25px 0 10px 0;
+            color: #1e3a5f;
+            font-weight: 500;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        ul,
+        ol {
+            margin-bottom: 20px;
+            padding-left: 25px;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        code {
+            background-color: #eef3f9;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+            font-size: 0.9rem;
+            color: #d14;
+            border: 1px solid #d0dbe8;
+        }
+
+        pre {
+            background: #1e2b3c;
+            color: #e7efff;
+            padding: 15px;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-size: 0.9rem;
+            margin: 20px 0;
+        }
+
+        .note {
+            background-color: #fff9e0;
+            border-left: 6px solid #f9c74f;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .tip {
+            background-color: #e0f2fe;
+            border-left: 6px solid #38bdf8;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .warning {
+            background-color: #ffe8e6;
+            border-left: 6px solid #f44336;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+
+        th {
+            background-color: #eef2f7;
+            font-weight: 600;
+            padding: 12px 10px;
+            border: 1px solid #cbd5e1;
+        }
+
+        td {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        .shortcut {
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #0f3b5e;
+            border: 1px solid #bac8dc;
+        }
+
+        hr {
+            margin: 40px 0 20px;
+            border: 0;
+            border-top: 2px dashed #cbd5e1;
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            color: #6c7e99;
+            font-size: 0.9rem;
+            border-top: 1px solid #dce5f0;
+            padding-top: 20px;
+        }
+
+        .version {
+            background-color: #dff0fe;
+            display: inline-block;
+            padding: 3px 15px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #005a9e;
+            margin-bottom: 20px;
+        }
+
+        .subtitle {
+            color: #2c5778;
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Network Traffic Analysis & Anomaly Detection System</h1>
+        <p class="subtitle">School of Cyber Science and Engineering, Huazhong University of Science and Technology - Comprehensive Programming Course Design</p>
+        <div class="version">Version 1.0 | March 2026</div>
+
+        <h2>📖 1. System Overview</h2>
+        <p>This system is a practical outcome of the "Comprehensive Programming Course Design" at the School of Cyber Science and Engineering, Huazhong University of Science and Technology. It integrates theoretical knowledge of computer networks, data structures, algorithm design, and C++/Python programming into a real‑world network security analysis scenario. Facing increasingly complex cyber attacks, real‑time monitoring and intelligent analysis of massive traffic have become critical to maintaining stable network operation. This system closely meets actual needs, efficiently processes real network session data, automatically builds network topology models, and integrates a series of functions such as traffic statistics, behavior analysis, anomaly detection, and result visualization, providing network administrators and security analysts with an intuitive and efficient all‑in‑one analysis tool.
+        </p>
+
+        <div class="tip">
+            <strong>✨ Core Capabilities at a Glance</strong>
+            <div class="feature-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 15px;">
+                <div class="feature-card">
+                    <div class="feature-icon">📁</div>
+                    <div class="feature-title">Multi‑format Data Support</div>
+                    <p>Read PCAP / CSV / JSON / HTML data</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <div class="feature-title">Traffic Statistics</div>
+                    <p>Build network topology, support filtering and traffic analysis based on custom conditions</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">Path Analysis</div>
+                    <p>Minimum congestion, minimum hop, minimum risk, multi‑strategy comparison</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🚨</div>
+                    <div class="feature-title">Anomaly Detection</div>
+                    <p>Port scanning, DDoS targets, star structures</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚙️</div>
+                    <div class="feature-title">Custom Security Rules</div>
+                    <p>IP ranges / protocols / ports, find policy violations</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🖼️</div>
+                    <div class="feature-title">Interactive Visualization</div>
+                    <p>Full‑network topology, subgraphs, paths, with export and sharing options</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>🛠️ Development Environment & Programming Languages</strong>
+            <ul style="margin-top: 8px;">
+                <li><strong>C++ Core Backend</strong>: Developed with CLion 2025.3.3 using <code>C++23</code> standard; final binary compiled with Microsoft Visual Studio 2026 (MSVC v143).</li>
+                <li><strong>Python Frontend & Tools</strong>: Based on <code>Python 3.14</code>, developed in PyCharm 2025.3.3, responsible for PCAP parsing, visualization rendering, and GUI.</li>
+                <li><strong>Graphical Interface</strong>: Built with <code>PyQt6</code> providing a modern interface, combined with Qt WebEngine to display interactive network topologies.</li>
+            </ul>
+        </div>
+
+        <h2>📦 2. Installation & Execution</h2>
+        <h3>2.1 System Requirements</h3>
+        <table>
+            <thead>
+                <tr><th>Component</th><th>Minimum Requirement</th><th>Recommended Configuration</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Operating System</td><td>Windows 10 64‑bit (version 1903 or later)</td><td>Windows 11 64‑bit (version 24H2 or later)</td></tr>
+                <tr><td>CPU</td><td>Intel Core i3 or equivalent</td><td>Intel Core i5 or equivalent</td></tr>
+                <tr><td>Memory</td><td>4 GB RAM</td><td>6 GB RAM or more</td></tr>
+                <tr><td>Disk</td><td>200 MB free space</td><td>SSD, 500 MB or more free space</td></tr>
+            </tbody>
+        </table>
+        <div class="tip">
+            <strong>📌 Tip</strong>: The system runs completely offline; no internet connection is required. All parsing and rendering are done with local resources.
+        </div>
+
+        <h3>2.2 Launching the Application</h3>
+        <p>After extracting the installation package, double‑click <code>NetworkAnalyzer.exe</code> and wait a moment for the main interface to appear. The first start may be slightly slower because the system detects your OS theme and initializes the rendering engine.</p>
+        <div class="note">
+            <strong>❗ Note</strong>: Do not move or delete the <code>_internal</code> folder inside the program directory; it contains core libraries, the backend executable, and frontend resources.
+        </div>
+
+        <h2>🖥️ 3. Main Interface Layout</h2>
+        <p>The main window is divided into five major areas:</p>
+        <ul>
+            <li><span class="shortcut">① Menu Bar</span>: File operations, thread count adjustment, language switching, help documentation, etc.</li>
+            <li><span class="shortcut">② Data File Bar</span>: Shows the path of the currently loaded data file; the “Browse” button switches data sources.</li>
+            <li><span class="shortcut">③ Function Tabs</span>: Traffic ranking, path finding, anomaly detection, custom rules, subgraph visualization.</li>
+            <li><span class="shortcut">④ Output Panel</span>: Contains three sub‑pages – “Run Log”, “Data Table”, and “Path & Details” – displaying analysis results in real time.</li>
+            <li><span class="shortcut">⑤ Visualization Canvas</span>: Embedded Qt WebEngine view that renders interactive network topologies.</li>
+        </ul>
+
+        <h2>📂 4. Data Preparation & Loading</h2>
+        <h3>4.1 Supported File Types</h3>
+        <table>
+            <thead><tr><th>Format</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><code>.csv</code></td><td>Pre‑processed standard network session data, containing source IP, destination IP, protocol, ports, traffic volume, duration, etc.</td></tr>
+                <tr><td><code>.pcap</code></td><td>Raw network packet capture files collected by Wireshark or similar tools.</td></tr>
+                <tr><td><code>.json</code></td><td>Previously exported network topology data (nodes, edges, and attributes), can be reloaded for review.</td></tr>
+                <tr><td><code>.html</code></td><td>Previously exported interactive topology visualization files, can be opened in a browser or within the system.</td></tr>
+            </tbody>
+        </table>
+
+        <h3>4.2 Loading Data</h3>
+        <p>Click the “Browse” button on the toolbar, or use the menu <code>File → Open Data File</code>, then select the target file to load.</p>
+        <ul>
+            <li>If you select a <strong>PCAP file</strong>, the program will automatically invoke the backend parser to convert it to CSV format and then load it. Note that large files may take some time.</li>
+            <li>If you select a <strong>JSON or HTML file</strong>, the program enters <em>“View‑Only Mode”</em>. You can browse the existing graph structure or export it to other formats, but you cannot perform new analysis operations.</li>
+        </ul>
+        <div class="tip">
+            <strong>📌 Tip</strong>: Temporary files generated during runtime are stored in the system’s temporary directory by default. You can periodically clean them to free up space.
+        </div>
+
+        <h2>🔧 5. Core Features Explained</h2>
+
+        <h3>5.1 Traffic Ranking</h3>
+        <p>Located in the first tab. Quickly discover the most active or suspicious nodes in the network.</p>
+        <ul>
+            <li><strong>Total Traffic Ranking</strong>: Calculates total inbound and outbound traffic for each IP node and sorts descending.</li>
+            <li><strong>HTTPS Traffic Ranking</strong>: Filters sessions using HTTPS (transport protocol TCP with destination port 443), aggregates HTTPS traffic per node, and sorts descending.</li>
+            <li><strong>Outbound Traffic Ratio</strong>: Filters nodes where outbound traffic accounts for more than a specified threshold (default 80%), sorts by total traffic descending, and displays the exact ratio.</li>
+        </ul>
+        <p>After clicking “Execute Traffic Ranking”, the results appear in the <strong>“Data Table”</strong> sub‑page. If you need to export the detailed results, you can copy the corresponding text from the “Run Log”.</p>
+
+        <h3>5.2 Path Finding</h3>
+        <p>Specify a source IP and a destination IP; the system computes the optimal path based on the selected strategy.</p>
+        <ul>
+            <li><strong>Minimum Congestion Path</strong>: Uses <code>DataSize / Duration</code> as the congestion metric for each edge, finds the path with the lowest total congestion.</li>
+            <li><strong>Minimum Hop Path</strong>: Finds the path with the fewest hops (shortest route).</li>
+            <li><strong>Minimum Risk Path</strong>: Uses a custom cost function (considering port security and port scanning behavior) to find the path with the lowest total risk.</li>
+            <li><strong>Compare Three Strategies</strong>: When this checkbox is selected, clicking the button computes optimal paths for all three strategies simultaneously and displays a comparison in the “Path & Details” sub‑page.</li>
+        </ul>
+        <p>After clicking “Find Path”, the system automatically switches to the <strong>“Path & Details”</strong> sub‑page, showing the sequence of IPs along the path along with corresponding congestion/risk values and other details.</p>
+
+        <h3>5.3 Anomaly Detection</h3>
+        <p>This tab contains three sub‑pages: Port Scan, DDoS Target, and Star Structure.</p>
+        <h4>📡 Port Scan Detection</h4>
+        <p>If a node initiates many connections to the same neighbor IP using many different destination ports, and its outbound traffic accounts for more than a threshold of its total traffic, it is flagged as a potential scanner. Default outbound ratio threshold is <code>80%</code>, and port count threshold is <code>20</code>. You can adjust these values to control sensitivity.</p>
+        <h4>💥 DDoS Target Detection</h4>
+        <p>If a node receives connection requests from a large number of distinct neighbors and its inbound traffic exceeds a threshold, it is flagged as a possible DDoS target. Default neighbor count threshold is <code>20</code>, inbound traffic threshold is <code>1GB</code>. Both can be adjusted.</p>
+        <h4>⭐ Star Structure Detection</h4>
+        <p>If a node communicates with many leaf nodes (nodes that connect only to it), it is marked as a star structure center. Default leaf node threshold is <code>20</code>, adjustable.</p>
+        <p>Clicking the “Detect” button on any sub‑page displays the results in the <strong>“Data Table”</strong> and automatically generates a subgraph that highlights the anomalous nodes and their connections.</p>
+
+        <h3>5.4 Custom Rules</h3>
+        <p>This feature allows users to define access control rules based on IP ranges, protocols, ports, and traffic thresholds, and then find all communication records that violate the rules.</p>
+        <ul>
+            <li><strong>Target IP</strong>: The central node to monitor.</li>
+            <li><strong>IP Range</strong>: Can be specified in CIDR format (e.g., <code>192.168.1.0/24</code>) or as a start‑end IP range.</li>
+            <li><strong>Optional Parameters</strong>: Protocol number, source port, destination port, maximum traffic threshold.</li>
+            <li><strong>Rule Type</strong>: “Deny” means the target IP is forbidden to communicate with IPs in the range and cannot use the specified protocol/ports; “Allow” means the target IP can only communicate with IPs in the range and only using the specified protocol/ports.</li>
+        </ul>
+        <p>After clicking “Check Violations”, the <strong>“Data Table”</strong> sub‑page lists all violating communication records, including IP addresses, protocol, ports, and the reason for violation. If you need to export the detailed results, you can copy the corresponding text from the “Run Log”.</p>
+
+        <h3>5.5 Subgraph Visualization</h3>
+        <p>Enter any IP address and click “Generate Subgraph”. The system finds the connected component containing that node and renders an interactive network topology using the PyVis engine, displayed in the right‑hand canvas. You can:</p>
+        <ul>
+            <li>Drag nodes and zoom with the mouse wheel.</li>
+            <li>Hover over nodes to see IP addresses; hover over edges to see traffic information.</li>
+            <li>Use the “Export” menu to save the current subgraph as a JSON or HTML file.</li>
+        </ul>
+
+        <h2>💾 6. Export Functionality</h2>
+        <p>Through the menu <code>File → Export</code>, you can save analysis results in several formats:</p>
+        <table>
+            <thead><tr><th>Export Item</th><th>Format</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td>PCAP‑converted CSV</td><td>.csv</td><td>If the original data was a PCAP file and has been converted, you can export the CSV for external use.</td></tr>
+                <tr><td>Full Network Topology</td><td>.json / .html</td><td>Export the entire network topology as JSON (data) or HTML (interactive visualization).</td></tr>
+                <tr><td>Current Subgraph</td><td>.json / .html</td><td>Export the currently visualized subgraph as JSON or HTML for sharing or archiving.</td></tr>
+            </tbody>
+        </table>
+        <div class="tip">
+            <strong>📌 Tip</strong>: Exported HTML files can be opened directly in a browser and use online resources for rendering.
+        </div>
+
+        <h2>⚙️ 7. Settings & Personalization</h2>
+        <h3>7.1 Thread Count</h3>
+        <p>The menu <code>Settings → Thread Count</code> lets you adjust the number of CPU cores used for background analysis. Default is <code>4</code>.</p>
+        <h3>7.2 Language Switching</h3>
+        <p>Click <code>Settings → Language</code> to choose between Simplified Chinese, Traditional Chinese, or English. Some parts of the interface may require a restart to take effect.</p>
+        <h3>7.3 Theme Adaptation</h3>
+        <p>The system automatically follows the Windows light/dark mode settings, adjusting interface background, text colors, and chart colors accordingly. You can change the appearance by modifying the system theme.</p>
+
+        <h2>🔍 8. View‑Only Mode</h2>
+        <p>When you directly open a <code>.json</code> or <code>.html</code> file, the system automatically enters <strong>View‑Only Mode</strong>:</p>
+        <ul>
+            <li>All data analysis functions are disabled.</li>
+            <li>You can only browse the existing graph structure and view node/edge attributes.</li>
+            <li>File export operations are still available.</li>
+        </ul>
+        <p>This mode is suitable for sharing analysis results or reviewing previously saved topologies without the original data.</p>
+
+        <h2>❓ 9. Frequently Asked Questions (FAQ)</h2>
+        <div class="note">
+            <strong>Q: The application seems unresponsive after loading a PCAP file.</strong><br>
+            A: Large PCAP files may take considerable time to parse and convert. Please be patient.
+        </div>
+        <div class="note">
+            <strong>Q: “No nodes in the graph” when generating a subgraph.</strong><br>
+            A: Possible reasons: ① The entered IP address does not exist in the current topology; ② There are no other nodes communicating with that IP; ③ The CSV file does not contain valid IP entries. Verify that the node exists first.
+        </div>
+        <div class="note">
+            <strong>Q: Large network topologies load slowly.</strong><br>
+            A: Due to performance limitations of PyVis and Qt WebEngine, we recommend loading data and then entering a specific IP to narrow down the subgraph instead of rendering the entire graph.
+        </div>
+        <div class="note">
+            <strong>Q: Custom rule check returns no results.</strong><br>
+            A: Check whether the target IP is correct, and whether the IP range, protocol, ports, etc., are too restrictive. Try relaxing the conditions gradually.
+        </div>
+        <div class="note">
+            <strong>Q: How is the risk defined for the “Minimum Risk Path”?</strong><br>
+            A: Risk is evaluated based on a “risk cost” assigned to each edge. The cost consists of two parts:<br>
+            &nbsp;&nbsp;• <strong>Base security factor</strong>: 1.0 if the communication uses secure protocols (e.g., HTTPS, SSH); otherwise 10.0.<br>
+            &nbsp;&nbsp;• <strong>Port scan penalty factor</strong>: Calculated from the number of distinct port pairs seen on that edge. More port pairs yield a higher penalty (max 3.0).<br>
+            The final edge risk cost = base security factor × port scan penalty factor. The system finds the path from source to destination with the smallest total risk cost, which effectively avoids potential port‑scanning behaviors and low‑security links.
+        </div>
+        <div class="note">
+            <strong>Q: How can I get software updates?</strong><br>
+            A: This is a course design project; version <code>1.0</code> is the final release. No update schedule is planned.
+        </div>
+
+        <h2>📋 10. Appendix: Data Format Reference</h2>
+        <p>The standard input CSV file must contain the following columns, encoded in UTF‑8:</p>
+        <pre>Source,Destination,Protocol,SrcPort,DstPort,DataSize,Duration
+192.168.1.10,10.0.0.22,6,54321,443,1200,0.5
+192.168.1.15,10.0.0.22,6,12345,80,800,0.3
+...</pre>
+        <p><strong>Column Descriptions</strong></p>
+        <ul>
+            <li><code>Source</code> / <code>Destination</code>: Dotted‑decimal IPv4 addresses.</li>
+            <li><code>Protocol</code>: IP protocol number (e.g., 6=TCP, 17=UDP, 1=ICMP).</li>
+            <li><code>SrcPort</code> / <code>DstPort</code>: Transport layer ports (leave empty if the protocol does not use ports).</li>
+            <li><code>DataSize</code>: Total bytes transferred in the session.</li>
+            <li><code>Duration</code>: Session duration in seconds.</li>
+        </ul>
+        <div class="tip">
+            <strong>📌 Tip</strong>: You can use Wireshark’s “Conversation Statistics” feature to export CSV data, or directly use raw <code>.pcap</code> files – the system automatically performs flow aggregation and preprocessing.
+        </div>
+
+        <h2>🏫 11. Support & Feedback</h2>
+        <p>This software is a course design project. If you encounter any issues or have suggestions for improvement, feel free to contact me:</p>
+        <ul>
+            <li>📧 Email: <code>3157668135@qq.com</code></li>
+            <li>📞 Phone: <code>13479743814</code></li>
+        </ul>
+
+        <hr>
+        <div class="footer">
+            ©2026 Na, Bian. All rights reserved. This manual was last updated on March 25, 2026.
+        </div>
+    </div>
+</body>
+
+</html>
