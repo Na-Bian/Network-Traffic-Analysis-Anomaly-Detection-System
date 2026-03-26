@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>網路流量分析與異常檢測系統 - 用戶手冊</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background-color: #f5f7fa;
+            color: #1e2b3c;
+            line-height: 1.6;
+            padding: 30px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-radius: 18px;
+            overflow: hidden;
+            padding: 30px 40px;
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 600;
+            border-left: 8px solid #0078d7;
+            padding-left: 20px;
+            margin-bottom: 10px;
+            color: #0a2c3e;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #3498db;
+        }
+
+        .feature-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .subhead {
+            color: #4a6fa5;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+            border-bottom: 1px solid #e0e6ed;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-top: 40px;
+            margin-bottom: 16px;
+            font-weight: 500;
+            background: linear-gradient(90deg, #f0f4fc, transparent);
+            padding: 8px 15px;
+            border-radius: 40px 0 0 40px;
+            border-left: 5px solid #0078d7;
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            margin: 25px 0 10px 0;
+            color: #1e3a5f;
+            font-weight: 500;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        ul,
+        ol {
+            margin-bottom: 20px;
+            padding-left: 25px;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        code {
+            background-color: #eef3f9;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+            font-size: 0.9rem;
+            color: #d14;
+            border: 1px solid #d0dbe8;
+        }
+
+        pre {
+            background: #1e2b3c;
+            color: #e7efff;
+            padding: 15px;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-size: 0.9rem;
+            margin: 20px 0;
+        }
+
+        .note {
+            background-color: #fff9e0;
+            border-left: 6px solid #f9c74f;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .tip {
+            background-color: #e0f2fe;
+            border-left: 6px solid #38bdf8;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .warning {
+            background-color: #ffe8e6;
+            border-left: 6px solid #f44336;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+
+        th {
+            background-color: #eef2f7;
+            font-weight: 600;
+            padding: 12px 10px;
+            border: 1px solid #cbd5e1;
+        }
+
+        td {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        .shortcut {
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #0f3b5e;
+            border: 1px solid #bac8dc;
+        }
+
+        hr {
+            margin: 40px 0 20px;
+            border: 0;
+            border-top: 2px dashed #cbd5e1;
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            color: #6c7e99;
+            font-size: 0.9rem;
+            border-top: 1px solid #dce5f0;
+            padding-top: 20px;
+        }
+
+        .version {
+            background-color: #dff0fe;
+            display: inline-block;
+            padding: 3px 15px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #005a9e;
+            margin-bottom: 20px;
+        }
+
+        .subtitle {
+            color: #2c5778;
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>網路流量分析與異常檢測系統</h1>
+        <p class="subtitle">華中科技大學網路空間安全學院 - 程式設計綜合課程設計</p>
+        <div class="version">版本 1.0 | 2026年3月</div>
+
+        <h2>📖 1. 系統簡介</h2>
+        <p>本系統是華中科技大學網路空間安全學院《程式設計綜合課程設計》課程的實踐成果，旨在將電腦網路、資料結構、演算法設計與 C++/Python 程式設計等理論知識綜合應用於貼近工程實際的網路安全分析場景。面對日益複雜的網路攻擊手段，對海量流量進行即時監控與智慧分析已成為保障網路穩定運行的關鍵。本系統緊扣實際需求，能夠高效處理真實的網路會話數據，自動建構網路拓撲模型，並整合流量統計、行為分析、異常檢測與結果視覺化等一系列功能，為網路管理員和安全分析師提供直觀、高效的一體化分析工具。
+        </p>
+
+        <div class="tip">
+            <strong>✨ 核心能力速覽</strong>
+            <div class="feature-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 15px;">
+                <div class="feature-card">
+                    <div class="feature-icon">📁</div>
+                    <div class="feature-title">多格式資料支援</div>
+                    <p>讀取 PCAP / CSV / JSON / HTML 資料</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <div class="feature-title">流量統計</div>
+                    <p>建構網路拓撲圖，支援基於特定條件的篩選與流量統計分析</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">路徑分析</div>
+                    <p>最小壅塞、最小跳數、最小風險、多策略對比</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🚨</div>
+                    <div class="feature-title">異常檢測</div>
+                    <p>連接埠掃描、DDoS 目標、星型結構</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚙️</div>
+                    <div class="feature-title">自訂安全規則</div>
+                    <p>IP 範圍 / 協定 / 連接埠規則，查找違規通訊記錄</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🖼️</div>
+                    <div class="feature-title">互動式視覺化</div>
+                    <p>全網拓撲、子圖、路徑的視覺化展示，支援匯出存檔與分享</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>🛠️ 開發環境與程式語言</strong>
+            <ul style="margin-top: 8px;">
+                <li><strong>C++ 核心後端</strong>：使用 CLion 2025.3.3 開發，採用 <code>C++23</code> 標準，最終二進位檔案由 Microsoft Visual Studio 2026 (MSVC v143) 編譯生成。</li>
+                <li><strong>Python 前端與工具</strong>：基於 <code>Python 3.14</code>，在 PyCharm 2025.3.3 中開發，負責 PCAP 解析、視覺化渲染及 GUI 介面。</li>
+                <li><strong>圖形介面</strong>：由 <code>PyQt6</code> 建構的現代化介面，結合 Qt WebEngine 展示互動式網路拓撲。</li>
+            </ul>
+        </div>
+
+        <h2>📦 2. 系統安裝與運行</h2>
+        <h3>2.1 系統要求</h3>
+        <table>
+            <thead>
+                <tr><th>元件</th><th>最低要求</th><th>推薦配置</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>作業系統</td><td>Windows 10 64位元（版本1903或更高）</td><td>Windows 11 64位元（版本24H2或更高）</td></tr>
+                <tr><td>CPU</td><td>Intel Core i3 或同等性能</td><td>Intel Core i5 或同等性能</td></tr>
+                <tr><td>記憶體</td><td>4 GB RAM</td><td>6 GB RAM 或更高</td></tr>
+                <tr><td>磁碟</td><td>200 MB 可用空間</td><td>SSD，500 MB 以上可用空間</td></tr>
+            </tbody>
+        </table>
+        <div class="tip">
+            <strong>📌 小提示</strong>：本系統完全離線運行，無需網際網路連接，所有解析與渲染均使用本地資源完成。
+        </div>
+
+        <h3>2.2 啟動程式</h3>
+        <p>解壓安裝包後，雙擊 <code>NetworkAnalyzer.exe</code>，稍等片刻即可進入主介面。首次啟動可能稍慢，因為系統會檢測系統主題並初始化渲染引擎。</p>
+        <div class="note">
+            <strong>❗ 注意</strong>：請勿移動或刪除程式目錄下的 <code>_internal</code> 資料夾，其中包含核心庫、後端可執行檔及前端資源。
+        </div>
+
+        <h2>🖥️ 3. 主介面佈局</h2>
+        <p>主視窗分為五個主要區域：</p>
+        <ul>
+            <li><span class="shortcut">① 功能表列</span>：提供檔案操作、執行緒數調整、語言切換、幫助文件等入口。</li>
+            <li><span class="shortcut">② 資料檔案欄</span>：顯示當前載入的資料檔案路徑，右側“瀏覽”按鈕用於切換資料來源。</li>
+            <li><span class="shortcut">③ 功能標籤頁</span>：流量排序、路徑查找、異常檢測、自訂規則、子圖視覺化五大功能模組。</li>
+            <li><span class="shortcut">④ 輸出面板</span>：包含“運行日誌”、“資料表格”、“路徑與詳情”三個子頁面，即時展示分析結果。</li>
+            <li><span class="shortcut">⑤ 視覺化畫布</span>：內嵌 Qt WebEngine 視圖，用於呈現互動式網路拓撲圖。</li>
+        </ul>
+
+        <h2>📂 4. 資料準備與載入</h2>
+        <h3>4.1 支援的檔案類型</h3>
+        <table>
+            <thead><tr><th>格式</th><th>說明</th></tr></thead>
+            <tbody>
+                <tr><td><code>.csv</code></td><td>預處理好的標準網路會話資料，包含來源IP、目的IP、協定、連接埠、流量、持續時間等欄位。</td></tr>
+                <tr><td><code>.pcap</code></td><td>透過 Wireshark 等工具捕獲的原始網路位元組流抓包檔案。</td></tr>
+                <tr><td><code>.json</code></td><td>先前匯出的網路拓撲資料（節點、邊及屬性），可重新載入並查看。</td></tr>
+                <tr><td><code>.html</code></td><td>先前匯出的互動式拓撲視覺化檔案，可直接在瀏覽器或本系統中開啟。</td></tr>
+            </tbody>
+        </table>
+
+        <h3>4.2 載入資料</h3>
+        <p>點擊工具列的“瀏覽”按鈕，或通過功能表 <code>檔案 → 開啟資料檔案</code>，選擇目標檔案即可載入。</p>
+        <ul>
+            <li>若選擇 <strong>PCAP 檔案</strong>，程式將自動呼叫後端解析模組，將其轉換為 CSV 格式並載入。請注意，大型檔案載入速度可能較慢。</li>
+            <li>若選擇 <strong>JSON 或 HTML 檔案</strong>，程式將進入<em>“僅檢視模式”</em>。您可以瀏覽已有的圖結構，或繼續匯出為其他格式，但無法執行新的分析操作。</li>
+        </ul>
+        <div class="tip">
+            <strong>📌 小提示</strong>：系統運行過程中產生的暫存檔案預設存放在系統臨時目錄，您可以定期清理以釋放空間。
+        </div>
+
+        <h2>🔧 5. 核心功能詳解</h2>
+
+        <h3>5.1 流量排序</h3>
+        <p>位於第一個標籤頁。用於快速發現網路中最活躍或最可疑的節點。</p>
+        <ul>
+            <li><strong>總流量排序</strong>：統計每個 IP 節點的總出入流量，按流量降序排列。</li>
+            <li><strong>HTTPS 流量排序</strong>：篩選使用HTTPS協定（傳輸層協定為 TCP 且目的連接埠為 443 ）進行通訊的會話，統計相關節點的 HTTPS 流量並降序排列。</li>
+            <li><strong>出流量佔比</strong>：篩選出流量佔總流量比例超過指定閾值（預設 80%）的節點，按總流量降序排列，並顯示具體佔比。</li>
+        </ul>
+        <p>點擊“執行流量排序”後，結果將顯示在<strong>“資料表格”</strong>子頁。如您需要匯出詳細結果，可從“運行日誌”中複製對應文本。</p>
+
+        <h3>5.2 路徑查找</h3>
+        <p>指定來源 IP 和目的 IP，系統將基於所選策略計算最優路徑。</p>
+        <ul>
+            <li><strong>最小壅塞路徑</strong>：以 <code>資料量/持續時間</code> 作為邊的壅塞度量，尋找總壅塞值最低的路徑。</li>
+            <li><strong>最小跳數路徑</strong>：尋找跳數最少的路徑，即最短路由。</li>
+            <li><strong>最小風險路徑</strong>：透過自訂代價函數（考慮連接埠安全性及連接埠掃描行為），尋找風險值最低的路徑。</li>
+            <li><strong>對比三種策略</strong>：勾選此核取方塊後，點擊按鈕將同時計算三種策略下的最優路徑，並在“路徑與詳情”子頁進行對比展示。</li>
+        </ul>
+        <p>點擊“查找路徑”後，系統自動切換到<strong>“路徑與詳情”</strong>子頁，展示路徑的 IP 序列及對應的壅塞/風險值及其他詳細資訊。</p>
+
+        <h3>5.3 異常檢測</h3>
+        <p>標籤頁內包含三個子頁：連接埠掃描、DDoS 目標、星型結構。</p>
+        <h4>📡 連接埠掃描檢測</h4>
+        <p>如果一個節點對同一鄰居IP發起了大量不同目的連接埠的連接，且該節點的出流量佔總流量的比例超過閾值，則標記為可疑掃描者。預設出流量佔比閾值為<code>80%</code>，連接埠數閾值為<code>20</code>，您可以調整這些值以控制檢測靈敏度。</p>
+        <h4>💥 DDoS 目標檢測</h4>
+        <p>如果一個節點接收來自大量不同鄰居的連接請求且入流量超過閾值，則標記為可能的 DDoS 攻擊目標。預設鄰居數閾值為<code>20</code>，入流量閾值為<code>1GB</code>，您可以調整這些值以控制檢測靈敏度。</p>
+        <h4>⭐ 星型結構查找</h4>
+        <p>如果一個節點與大量葉子節點（只與該節點連接）通訊，則標記為星型結構中心。預設葉子節點數閾值為<code>20</code>，您可以調整該值以控制檢測靈敏度。</p>
+        <p>點擊各子頁的“檢測”按鈕後，結果將顯示在<strong>“資料表格”</strong>中，並自動生成對應的子圖，突出展示異常節點及其連接關係。</p>
+
+        <h3>5.4 自訂規則</h3>
+        <p>本功能允許使用者根據 IP 範圍、協定、連接埠、流量閾值自訂存取控制規則，並找出所有違反規則的通訊記錄。</p>
+        <ul>
+            <li><strong>目標 IP</strong>：要監控的中心節點。</li>
+            <li><strong>IP 範圍</strong>：可選擇 CIDR 格式（如 <code>192.168.1.0/24</code>）或起始-結束 IP 範圍。</li>
+            <li><strong>可選參數</strong>：協定號、來源連接埠、目的連接埠、最大流量閾值。</li>
+            <li><strong>規則類型</strong>：“拒絕”表示目標 IP 禁止與範圍內 IP 通訊，且禁止使用指定協定/連接埠；“允許”表示目標 IP 只能與範圍內 IP 通訊，且只能使用指定協定/連接埠。</li>
+        </ul>
+        <p>點擊“檢測違規記錄”後，<strong>“資料表格”</strong>子頁將展示所有違反規則的通訊記錄，包括IP位址、協定、連接埠、違規原因等，如您需要匯出詳細結果，可從“運行日誌”中複製對應文本。</p>
+
+        <h3>5.5 子圖視覺化</h3>
+        <p>輸入任意 IP 位址，點擊“生成子圖”，系統將找出該節點所在的連通分量，並利用 PyVis 引擎渲染成交互式網路拓撲圖，顯示在右側畫布中。您可以：</p>
+        <ul>
+            <li>拖拽節點、滾輪縮放。</li>
+            <li>懸停節點查看 IP 位址，懸停邊查看流量資訊。</li>
+            <li>通過功能表“匯出”儲存當前子圖為 JSON 或 HTML 檔案。</li>
+        </ul>
+
+        <h2>💾 6. 匯出功能</h2>
+        <p>通過功能表 <code>檔案 → 匯出</code>，您可以將分析結果儲存為多種格式：</p>
+        <table>
+            <thead><tr><th>匯出項</th><th>格式</th><th>說明</th></tr></thead>
+            <tbody>
+                <tr><td>PCAP 轉換的 CSV</td><td>.csv</td><td>若原始資料為 PCAP 且已完成轉換，可匯出為 CSV 檔案供外部使用。</td></tr>
+                <tr><td>全網拓撲</td><td>.json / .html</td><td>將整個網路拓撲圖匯出為 JSON（資料）或 HTML（互動式視覺化）檔案。</td></tr>
+                <tr><td>當前子圖</td><td>.json / .html</td><td>將當前視覺化的子圖匯出為 JSON 或 HTML 檔案，便於分享或存檔。</td></tr>
+            </tbody>
+        </table>
+        <div class="tip">
+            <strong>📌 小提示</strong>：匯出的 HTML 檔案可直接用瀏覽器開啟，預設使用線上資源進行解析。
+        </div>
+
+        <h2>⚙️ 7. 設定與個性化</h2>
+        <h3>7.1 執行緒數</h3>
+        <p>功能表 <code>設定 → 執行緒數</code> 可調整後台分析使用的CPU核心數。預設為<code>4</code>。</p>
+        <h3>7.2 語言切換</h3>
+        <p>點擊功能表 <code>設定 → 語言 / Language</code> 可選擇簡體中文、繁體中文或英語。部分介面需要重啟程式才能生效。</p>
+        <h3>7.3 主題自適應</h3>
+        <p>系統自動跟隨 Windows 系統淺色/深色模式，調整介面背景、文字顏色及圖表配色。您可以通過修改系統主題來改變程式外觀。</p>
+
+        <h2>🔍 8. 僅檢視模式</h2>
+        <p>當您直接開啟一個 <code>.json</code> 或 <code>.html</code> 檔案時，系統自動進入<strong>僅檢視模式</strong>：</p>
+        <ul>
+            <li>所有資料分析功能不可用。</li>
+            <li>僅允許瀏覽已有的圖結構、查看節點/邊屬性。</li>
+            <li>您仍可執行檔案匯出操作。</li>
+        </ul>
+        <p>此模式適用於分享分析結果或在沒有原始資料時回顧之前儲存的拓撲。</p>
+
+        <h2>❓ 9. 常見問題（FAQ）</h2>
+        <div class="note">
+            <strong>Q: 載入 PCAP 檔案後很長時間沒反應？</strong><br>
+            A: 大型 PCAP 檔案轉換可能耗時較長，請耐心等待。
+        </div>
+        <div class="note">
+            <strong>Q: 生成子圖時顯示“圖中無任何節點”？</strong><br>
+            A: 可能原因：① 輸入的 IP 位址不在當前拓撲中；② 沒有與該 IP 通訊的其他節點；③ CSV 檔案中未包含有效 IP。請先驗證該節點是否存在。
+        </div>
+        <div class="note">
+            <strong>Q: 大型網路拓撲圖載入緩慢？</strong><br>
+            A: 受到 PyVis 與 Qt WebEngine 效能限制，建議在載入資料後輸入特定 IP 以縮小子圖範圍，避免渲染全圖。
+        </div>
+        <div class="note">
+            <strong>Q: 自訂規則查找結果為空？</strong><br>
+            A: 請檢查目標 IP 是否正確，以及 IP 範圍、協定、連接埠等條件是否過於嚴格。您可以逐步放寬條件測試。
+        </div>
+        <div class="note">
+            <strong>Q: “最小風險路徑”中網路通訊的風險程度是如何定義的？</strong><br>
+            A: 風險程度基於邊的“風險代價”進行評估。每條邊的風險代價由兩部分構成：<br>
+            &nbsp;&nbsp;• <strong>基礎安全係數</strong>：若通訊涉及安全協定（如 HTTPS、SSH 等），係數為 1.0；否則為 10.0。<br>
+            &nbsp;&nbsp;• <strong>連接埠掃描懲罰係數</strong>：根據通訊中出現的不同連接埠對數量進行計算，連接埠對數量越多，懲罰係數越高（最大不超過 3.0）。<br>
+            最終邊的風險代價 = 基礎安全係數 × 連接埠掃描懲罰係數。系統將尋找從來源到目的的所有路徑中，總風險代價最小的路徑作為“最小風險路徑”。該設計能夠有效識別並規避潛在的連接埠掃描行為和低安全性通訊鏈路。
+        </div>
+        <div class="note">
+            <strong>Q: 如何獲取軟體更新？</strong><br>
+            A: 課程設計作品，版本 <code>1.0</code> 為最終發布版，後續更新時間待定。
+        </div>
+
+        <h2>📋 10. 附錄：資料格式參考</h2>
+        <p>標準輸入 CSV 檔案必須包含以下欄位，編碼為 UTF-8：</p>
+        <pre>Source,Destination,Protocol,SrcPort,DstPort,DataSize,Duration
+192.168.1.10,10.0.0.22,6,54321,443,1200,0.5
+192.168.1.15,10.0.0.22,6,12345,80,800,0.3
+...</pre>
+        <p><strong>欄位說明</strong></p>
+        <ul>
+            <li><code>Source</code> / <code>Destination</code>：點分十進位 IPv4 位址。</li>
+            <li><code>Protocol</code>：IP 協定號（例如 6=TCP, 17=UDP, 1=ICMP）。</li>
+            <li><code>SrcPort</code> / <code>DstPort</code>：傳輸層連接埠（若協定無連接埠概念則留空）。</li>
+            <li><code>DataSize</code>：會話總位元組數。</li>
+            <li><code>Duration</code>：會話持續時間（秒）。</li>
+        </ul>
+        <div class="tip">
+            <strong>📌 小提示</strong>：您可以使用 Wireshark 的“會話統計”功能匯出 CSV 資料，或直接使用原始 <code>.pcap</code> 檔案，系統會自動完成流聚合與預處理。
+        </div>
+
+        <h2>🏫 11. 技術支援與反饋</h2>
+        <p>本軟體為課程設計作品，如果您在使用中遇到任何問題或有改進建議，歡迎聯繫我：</p>
+        <ul>
+            <li>📧 信箱：<code>3157668135@qq.com</code></li>
+            <li>📞 電話：<code>13479743814</code></li>
+        </ul>
+
+        <hr>
+        <div class="footer">
+            ©2026 那，邊。版權所有。 本手冊最後更新於 2026年3月25日。
+        </div>
+    </div>
+</body>
+
+</html>
