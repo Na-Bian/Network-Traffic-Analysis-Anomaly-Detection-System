@@ -42,6 +42,8 @@ void printUsage(const char *progName) {
             << "  --dst <ip>                        目的IP（用于路径）\n"
             << "  --threshold <num>                 阈值（端口扫描、DDoS、星型结构）\n"
             << "  --in-data-threshold <num>         入流量阈值（DDoS）\n"
+            << "  --in-ratio-threshold <num>        入流量占比阈值（DDoS，0-1）\n"
+            << "  --min-traffic <num>               最小总流量阈值（端口扫描）\n"
             << "  --threads <num>                   线程数（默认CPU核心数）\n"
             << "  --max-paths <num>                 最多输出的等价路径数量（默认100）\n"
             << "  --rule-target <ip>                自定义规则：目标IP\n"
@@ -66,10 +68,11 @@ int main(int argc, char *argv[]) {
         string inputFile, task, targetIP, srcIP, dstIP, outputJsonFile;
         string ruleTarget, rangeCIDR, rangeStart, rangeEnd, ruleTypeStr;
         string sortType = "total"; // 默认使用总流量排序
-        double ratioThreshold = 0.8, inDataThreshold = 1LL << 30; // 默认出流量占比阈值和DDoS入流量阈值
+        double ratioThreshold = 0.8, inRatioThreshold = 0.8; // 默认出/入流量占比阈值
         uint8_t ruleProtocol = 0;
         uint16_t ruleSrcPort = 0, ruleDstPort = 0;
         long long maxTraffic = (numeric_limits<long long>::max)();
+        long long inDataThreshold = 1LL << 30, minTraffic = 0; // 默认DDoS入流量阈值和端口扫描最小样本
         bool hasCIDR = false, hasStartEnd = false;
         int threshold = 0;
         int threads = static_cast<int>(Graph::defaultThreadCount()); //默认线程数为4
@@ -104,6 +107,10 @@ int main(int argc, char *argv[]) {
                 ratioThreshold = stod(argv[++i]);
             } else if (arg == "--in-data-threshold" && i + 1 < argc) {
                 inDataThreshold = stoll(argv[++i]);
+            } else if (arg == "--in-ratio-threshold" && i + 1 < argc) {
+                inRatioThreshold = stod(argv[++i]);
+            } else if (arg == "--min-traffic" && i + 1 < argc) {
+                minTraffic = stoll(argv[++i]);
             } else if (arg == "--help") {
                 printUsage(argv[0]);
                 return 0;
@@ -307,10 +314,15 @@ int main(int argc, char *argv[]) {
             }
         } else if (task == "port-scan") {
             int thr = threshold > 0 ? threshold : 20;
-            auto scanners = graph.detectPortScanners(thr, ratioThreshold);
+            auto scanners = graph.detectPortScanners(thr, ratioThreshold, minTraffic);
             cout << "检测到端口扫描攻击者 (" << scanners.size() << " 个):\n";
-            for (const auto &[ip, portCount, outRatio]: scanners) {
-                cout << ip.toString() << "," << portCount << "," << outRatio << "\n";
+            for (const auto &scanner: scanners) {
+                cout << scanner.ip.toString() << ","
+                        << scanner.portCount << ","
+                        << scanner.targetCount << ","
+                        << scanner.scanType << ","
+                        << scanner.outRatio << ","
+                        << scanner.totalTraffic << "\n";
             }
             if (!outputJsonFile.empty()) {
                 SubgraphExporter(graph).exportPortScannersAsSubgraph(scanners, outputJsonFile);
@@ -318,10 +330,13 @@ int main(int argc, char *argv[]) {
             }
         } else if (task == "ddos-target") {
             int thr = threshold > 0 ? threshold : 20;
-            auto targets = graph.detectDDoSTargets(thr, inDataThreshold);
+            auto targets = graph.detectDDoSTargets(thr, inDataThreshold, inRatioThreshold);
             cout << "检测到DDoS攻击目标 (" << targets.size() << " 个):\n";
-            for (const auto &[ip, neighborCount, inData]: targets) {
-                cout << ip.toString() << "," << neighborCount << "," << inData << "\n";
+            for (const auto &target: targets) {
+                cout << target.ip.toString() << ","
+                        << target.sourceCount << ","
+                        << target.inData << ","
+                        << target.inRatio << "\n";
             }
             if (!outputJsonFile.empty()) {
                 SubgraphExporter(graph).exportDDoSTargetsAsSubgraph(targets, outputJsonFile);
@@ -332,10 +347,13 @@ int main(int argc, char *argv[]) {
             auto stars = graph.findStarStructures(thr);
             cout << "找到星型结构 (" << stars.size() << " 个):\n";
             for (size_t i = 0; i < stars.size(); ++i) {
-                const auto &[center, neighbors, totalData] = stars[i];
+                const auto &[center, neighbors, totalData, inData, outData, leafRatio] = stars[i];
                 cout << "星型 " << i + 1 << ": 中心=" << center.toString()
                         << ", 邻居数=" << neighbors.size()
-                        << ", 总流量=" << totalData << "\n";
+                        << ", 总流量=" << totalData
+                        << ", 入流量=" << inData
+                        << ", 出流量=" << outData
+                        << ", 叶子占比=" << leafRatio << "\n";
                 cout << "  邻居 (IP, 流量): ";
                 for (const auto &[ip, traffic]: neighbors) {
                     cout << ip.toString() << "(" << traffic << ") ";

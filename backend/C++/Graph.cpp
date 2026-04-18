@@ -66,15 +66,24 @@ void Graph::addRecord(const IPAddress &srcIP, const IPAddress &dstIP, const uint
 }
 
 //端口扫描攻击者检测
-set<tuple<IPAddress, int, double> > Graph::detectPortScanners(const int portThreshold,
-                                                              const double outRatioThreshold) const {
-    set<tuple<IPAddress, int, double> > scanners;
+set<PortScanner> Graph::detectPortScanners(const int portThreshold,
+                                           const double outRatioThreshold,
+                                           const long long minTraffic) const {
+    set<PortScanner> scanners;
     const int n = verticesList.getVertexCount();
-    const auto ratio = getNodesWithOutRatioAbove(outRatioThreshold);
 
     for (int i = 0; i < n; ++i) {
-        // 遍历每个节点
+        const long long inData = verticesList.getTotalInData(i);
+        const long long outData = verticesList.getTotalOutData(i);
+        const long long totalData = inData + outData;
+        if (totalData <= 0 || totalData < minTraffic) continue;
+
+        const double outRatio = static_cast<double>(outData) / static_cast<double>(totalData);
+        if (outRatio < outRatioThreshold) continue;
+
         const auto &edges = verticesList.getEdges(i); // 获取当前节点的所有出边
+        int maxPortsToOneTarget = 0;
+        unordered_map<uint16_t, set<int> > targetsByDstPort;
 
         for (const int edgeIdx: edges.getAllEdgeIndices()) {
             const auto &edgeInfo = edges.getEdgeInfo(edgeIdx);
@@ -82,39 +91,63 @@ set<tuple<IPAddress, int, double> > Graph::detectPortScanners(const int portThre
             // 对该节点与某个邻居节点之间的所有通信记录，统计不同目的端口的总数
             set<uint16_t> uniqueDstPorts;
             for (const auto &stats: edgeInfo.protocolStats | std::views::values) {
-                for (const auto &dstPort: stats.ports | std::views::values) {
+                for (const auto &[srcPort, dstPort]: stats.ports) {
                     uniqueDstPorts.insert(dstPort);
+                    targetsByDstPort[dstPort].insert(edgeInfo.dstIndex);
                 }
             }
+            maxPortsToOneTarget = max(maxPortsToOneTarget, static_cast<int>(uniqueDstPorts.size()));
+        }
 
-            // 如果对同一个邻居发起了过多目的端口的连接
-            if (uniqueDstPorts.size() > portThreshold) {
-                // 如果节点出流量占总流量的比例超过指定阈值，则判定为端口扫描攻击者
-                const auto it = ranges::find(ratio, verticesList.getIP(i), [](const auto &tup) {
-                    return get<0>(tup);
-                });
-                if (it != ratio.end()) {
-                    // 将攻击者的IP地址、不同目的端口数量和出流量占比添加到结果集合中
-                    scanners.insert({verticesList.getIP(i), static_cast<int>(uniqueDstPorts.size()), get<2>(*it)});
-                }
-                break;
-            }
+        int maxTargetsForOnePort = 0;
+        for (const auto &[dstPort, targets]: targetsByDstPort) {
+            maxTargetsForOnePort = max(maxTargetsForOnePort, static_cast<int>(targets.size()));
+        }
+
+        const bool verticalScan = maxPortsToOneTarget > portThreshold;
+        const bool horizontalScan = maxTargetsForOnePort > portThreshold;
+        if (verticalScan || horizontalScan) {
+            string scanType = "vertical";
+            if (verticalScan && horizontalScan) scanType = "mixed";
+            else if (horizontalScan) scanType = "horizontal";
+            scanners.insert({
+                verticesList.getIP(i),
+                maxPortsToOneTarget,
+                maxTargetsForOnePort,
+                scanType,
+                outRatio,
+                totalData
+            });
         }
     }
     return scanners;
 }
 
 //DDoS攻击目标检测
-set<tuple<IPAddress, int, long long> > Graph::detectDDoSTargets(const int neighborThreshold,
-                                                                const long long inDataThreshold) const {
-    set<tuple<IPAddress, int, long long> > targets;
+set<DDoSTarget> Graph::detectDDoSTargets(const int sourceThreshold,
+                                         const long long inDataThreshold,
+                                         const double inRatioThreshold) const {
+    set<DDoSTarget> targets;
     const int n = verticesList.getVertexCount();
+    vector<set<int> > incomingSources(n);
 
-    const auto allNeighbors = analyzeNeighbors(); // 获取图中每个节点的邻居信息列表
     for (int i = 0; i < n; ++i) {
-        if (verticesList.getTotalInData(i) > inDataThreshold && allNeighbors[i].size() > neighborThreshold) {
-            //如果节点的入流量超过指定阈值，并且与大量不同的邻居节点通信，则判定为DDoS攻击目标
-            targets.insert({verticesList.getIP(i), static_cast<int>(allNeighbors[i].size()), verticesList.getTotalInData(i)});
+        const auto &edges = verticesList.getEdges(i);
+        for (const int edgeIdx: edges.getAllEdgeIndices()) {
+            incomingSources[edges.getEdgeInfo(edgeIdx).dstIndex].insert(i);
+        }
+    }
+
+    for (int i = 0; i < n; ++i) {
+        const long long inData = verticesList.getTotalInData(i);
+        const long long outData = verticesList.getTotalOutData(i);
+        const long long totalData = inData + outData;
+        if (totalData <= 0) continue;
+
+        const int sourceCount = static_cast<int>(incomingSources[i].size());
+        const double inRatio = static_cast<double>(inData) / static_cast<double>(totalData);
+        if (inData > inDataThreshold && sourceCount > sourceThreshold && inRatio >= inRatioThreshold) {
+            targets.insert({verticesList.getIP(i), sourceCount, inData, inRatio});
         }
     }
 
@@ -244,7 +277,9 @@ vector<StarStructure> Graph::findStarStructures(const int degreeThreshold) const
         const auto &currNeighbors = neighbors[i];
 
         const IPAddress centerNode = verticesList.getIP(i); // 中心节点的IP地址
-        const long long totalData = verticesList.getTotalTraffic(i); // 中心节点与邻居节点之间的总流量
+        const long long inData = verticesList.getTotalInData(i);
+        const long long outData = verticesList.getTotalOutData(i);
+        const long long totalData = inData + outData; // 中心节点与邻居节点之间的总流量
         vector<pair<IPAddress, long long> > neighborIPs; // 存储满足条件的邻居节点的IP地址列表和与中心节点之间的流量
 
         //检查邻居中叶子数是否超过度数阈值
@@ -262,7 +297,10 @@ vector<StarStructure> Graph::findStarStructures(const int degreeThreshold) const
 
         //如果叶子数超过度数阈值，则构建星型结构信息并添加到结果列表中
         if (totalLeaves > degreeThreshold) {
-            starStructures.push_back({centerNode, std::move(neighborIPs), totalData});
+            const double leafRatio = currNeighbors.empty()
+                                         ? 0.0
+                                         : static_cast<double>(totalLeaves) / static_cast<double>(currNeighbors.size());
+            starStructures.push_back({centerNode, std::move(neighborIPs), totalData, inData, outData, leafRatio});
         }
     }
     return starStructures; //返回找到的星型结构列表

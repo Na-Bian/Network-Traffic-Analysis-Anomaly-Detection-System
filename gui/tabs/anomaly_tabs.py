@@ -33,14 +33,32 @@ class PortScanTab(QWidget):
         ratio_row.addWidget(self.ratio_spin)
         layout.addLayout(ratio_row)
 
+        traffic_row = QHBoxLayout()
+        self.min_traffic_label = QLabel()
+        traffic_row.addWidget(self.min_traffic_label)
+        self.min_traffic_edit = QLineEdit()
+        self.min_traffic_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        traffic_row.addWidget(self.min_traffic_edit)
+        self.min_traffic_unit = QComboBox()
+        self.min_traffic_unit.setCurrentIndex(1)
+        traffic_row.addWidget(self.min_traffic_unit)
+        layout.addLayout(traffic_row)
+
         self.detect_btn = QPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.detect_btn)
         self.retranslate_ui()
 
     def retranslate_ui(self):
+        unit_index = self.min_traffic_unit.currentIndex()
         self.threshold_label.setText(tr("port_scan_threshold_label", "端口数阈值:"))
         self.ratio_label.setText(tr("outratio_threshold_label", "出流量占比阈值:"))
+        self.min_traffic_label.setText(tr("port_scan_min_traffic_label", "最小总流量:"))
+        self.min_traffic_edit.setPlaceholderText(tr("port_scan_min_traffic_placeholder", "留空表示不限制"))
+        with QSignalBlocker(self.min_traffic_unit):
+            self.min_traffic_unit.clear()
+            self.min_traffic_unit.addItems([tr("ddos_unit_bytes", "字节"), "KB", "MB", "GB"])
+            self.min_traffic_unit.setCurrentIndex(unit_index if unit_index >= 0 else 1)
         self.detect_btn.setText(tr("port_scan_button", "检测"))
 
 
@@ -73,6 +91,17 @@ class DDosTab(QWidget):
         traffic_row.addWidget(self.traffic_unit)
         layout.addLayout(traffic_row)
 
+        ratio_row = QHBoxLayout()
+        self.in_ratio_label = QLabel()
+        ratio_row.addWidget(self.in_ratio_label)
+        self.in_ratio_spin = QDoubleSpinBox()
+        self.in_ratio_spin.setRange(0.0, 1.0)
+        self.in_ratio_spin.setValue(0.8)
+        self.in_ratio_spin.setSingleStep(0.05)
+        self.in_ratio_spin.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        ratio_row.addWidget(self.in_ratio_spin)
+        layout.addLayout(ratio_row)
+
         self.detect_btn = QPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.detect_btn)
@@ -83,6 +112,7 @@ class DDosTab(QWidget):
         self.neighbor_label.setText(tr("ddos_neighbor_threshold_label", "邻居数阈值:"))
         self.traffic_label.setText(tr("ddos_traffic_threshold_label", "入流量阈值:"))
         self.traffic_edit.setPlaceholderText(tr("ddos_traffic_placeholder", "例如：1024"))
+        self.in_ratio_label.setText(tr("ddos_in_ratio_threshold_label", "入流量占比阈值:"))
         with QSignalBlocker(self.traffic_unit):
             self.traffic_unit.clear()
             self.traffic_unit.addItems([tr("ddos_unit_bytes", "字节"), "KB", "MB", "GB"])

@@ -110,10 +110,14 @@ class CustomRuleTab(QScrollArea):
         self.rule_type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.rule_type_combo, 3, 1, 1, 2)
 
-        # 检测按钮 (行4)
+        self.rule_semantics_label = QLabel()
+        self.rule_semantics_label.setWordWrap(True)
+        layout.addWidget(self.rule_semantics_label, 4, 0, 1, 3)
+
+        # 检测按钮 (行5)
         self.detect_btn = QPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        layout.addWidget(self.detect_btn, 4, 0, 1, 3)
+        layout.addWidget(self.detect_btn, 5, 0, 1, 3)
 
         layout.setColumnStretch(1, 1)
         self.setWidget(content)
@@ -166,4 +170,7 @@ class CustomRuleTab(QScrollArea):
             ])
             if rule_type_index >= 0:
                 self.rule_type_combo.setCurrentIndex(min(rule_type_index, self.rule_type_combo.count() - 1))
+        self.rule_semantics_label.setText(
+            tr("custom_rule_semantics_hint", "IP范围、协议和端口会作为组合条件匹配；拒绝规则命中即违规，允许规则未命中即违规。")
+        )
         self.detect_btn.setText(tr("custom_rule_button", "检测违规记录"))

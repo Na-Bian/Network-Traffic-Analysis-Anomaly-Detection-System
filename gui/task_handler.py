@@ -163,7 +163,7 @@ class TaskHandler(QObject):
                 ]
                 pattern = r"^([\d\.]+),(\d+)$"
                 break
-            elif line.startswith("出流量占比 >"):  # 后端固定输出
+            elif line.startswith("出流量占比 >") or line.startswith("出流量占比 >="):  # 后端固定输出
                 headers = [
                     tr("flow_sort_table_header_ip", "IP地址"),
                     tr("flow_sort_table_header_total_traffic", "总流量（字节）"),
@@ -189,44 +189,57 @@ class TaskHandler(QObject):
     def parse_port_scan_to_table(self):
         headers = [
             tr("port_scan_table_header_ip", "IP地址"),
-            tr("port_scan_table_header_port_count", "不同目的端口数"),
-            tr("flow_sort_table_header_out_ratio", "出流量占比")
+            tr("port_scan_table_header_port_count", "最大目的端口数"),
+            tr("port_scan_table_header_target_count", "最大目标数"),
+            tr("port_scan_table_header_scan_type", "扫描类型"),
+            tr("flow_sort_table_header_out_ratio", "出流量占比"),
+            tr("flow_sort_table_header_total_traffic", "总流量（字节）")
         ]
         self.main.result_table.setColumnCount(len(headers))
         self.main.result_table.setHorizontalHeaderLabels(headers)
 
         row_idx = 0
         for line in self.task_output_buffer:
-            # 匹配格式：IP,端口数,占比
-            match = re.match(r'^([\d\.]+),(\d+),([\d\.]+)$', line.strip())
+            # 匹配格式：IP,最大端口数,最大目标数,扫描类型,出流量占比,总流量
+            match = re.match(r'^([\d\.]+),(\d+),(\d+),([a-z]+),([\d\.]+),(\d+)$', line.strip())
             if match:
-                ip, port_count, ratio = match.groups()
+                ip, port_count, target_count, scan_type, ratio, total_traffic = match.groups()
+                scan_type = {
+                    "vertical": tr("port_scan_type_vertical", "纵向扫描"),
+                    "horizontal": tr("port_scan_type_horizontal", "横向扫描"),
+                    "mixed": tr("port_scan_type_mixed", "混合扫描")
+                }.get(scan_type, scan_type)
                 self.main.result_table.insertRow(row_idx)
                 self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(ip))
                 self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(port_count))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(ratio))
+                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(target_count))
+                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(scan_type))
+                self.main.result_table.setItem(row_idx, 4, QTableWidgetItem(ratio))
+                self.main.result_table.setItem(row_idx, 5, QTableWidgetItem(total_traffic))
                 row_idx += 1
 
     def parse_ddos_to_table(self):
         """DDoS目标检测结果解析"""
         headers = [
             tr("ddos_table_header_ip", "IP地址"),
-            tr("ddos_table_header_neighbor_count", "邻居数"),
-            tr("ddos_table_header_in_data", "入流量（字节）")
+            tr("ddos_table_header_neighbor_count", "入方向源数"),
+            tr("ddos_table_header_in_data", "入流量（字节）"),
+            tr("ddos_table_header_in_ratio", "入流量占比")
         ]
         self.main.result_table.setColumnCount(len(headers))
         self.main.result_table.setHorizontalHeaderLabels(headers)
 
         row_idx = 0
         for line in self.task_output_buffer:
-            # 匹配格式：IP,邻居数,入流量
-            match = re.match(r'^([\d\.]+),(\d+),(\d+)$', line.strip())
+            # 匹配格式：IP,入方向源数,入流量,入流量占比
+            match = re.match(r'^([\d\.]+),(\d+),(\d+),([\d\.]+)$', line.strip())
             if match:
-                ip, neighbor_count, in_data = match.groups()
+                ip, neighbor_count, in_data, in_ratio = match.groups()
                 self.main.result_table.insertRow(row_idx)
                 self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(ip))
                 self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(neighbor_count))
                 self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(in_data))
+                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(in_ratio))
                 row_idx += 1
 
     def parse_star_to_table(self):
@@ -234,22 +247,28 @@ class TaskHandler(QObject):
         headers = [
             tr("star_table_header_center_ip", "中心IP"),
             tr("star_table_header_neighbor_count", "邻居叶子数"),
-            tr("star_table_header_total_traffic", "总流量")
+            tr("star_table_header_total_traffic", "总流量"),
+            tr("ddos_table_header_in_data", "入流量（字节）"),
+            tr("star_table_header_out_data", "出流量（字节）"),
+            tr("star_table_header_leaf_ratio", "叶子占比")
         ]
         self.main.result_table.setColumnCount(len(headers))
         self.main.result_table.setHorizontalHeaderLabels(headers)
 
         # 正则中的“星型”等是后端固定输出，不翻译
-        pattern = r"星型 \d+: 中心=([\d\.]+), 邻居数=(\d+), 总流量=(\d+)"
+        pattern = r"星型 \d+: 中心=([\d\.]+), 邻居数=(\d+), 总流量=(\d+), 入流量=(\d+), 出流量=(\d+), 叶子占比=([\d\.]+)"
         row_idx = 0
         for line in self.task_output_buffer:
             match = re.search(pattern, line)
             if match:
-                center_ip, neighbor_count, total = match.groups()
+                center_ip, neighbor_count, total, in_data, out_data, leaf_ratio = match.groups()
                 self.main.result_table.insertRow(row_idx)
                 self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(center_ip))
                 self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(neighbor_count))
                 self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(total))
+                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(in_data))
+                self.main.result_table.setItem(row_idx, 4, QTableWidgetItem(out_data))
+                self.main.result_table.setItem(row_idx, 5, QTableWidgetItem(leaf_ratio))
                 row_idx += 1
 
     def parse_path_to_detail(self):

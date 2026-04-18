@@ -17,7 +17,7 @@ from .tabs.path_tab import PathTab
 from .tabs.subgraph_tab import SubgraphTab
 from .task_handler import TaskHandler
 from .translator import tr, lang_mgr
-from .utils import resource_path, TempDirManager
+from .utils import resource_path, core_executable_path, TempDirManager
 from .worker import SubgraphWorker, PcapConvertWorker
 
 
@@ -886,7 +886,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _core_command(task, *args):
         return [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
+            core_executable_path(),
             "--task", task,
             *args,
         ]
@@ -948,21 +948,31 @@ class MainWindow(QMainWindow):
     def run_port_scan(self):
         if not self.is_data_valid():
             return
-        thr = self.anomaly_tab.port_scan_tab.threshold_spin.value()
-        ratio = self.anomaly_tab.port_scan_tab.ratio_spin.value()
-        self._execute_task(
-            "port-scan",
-            "--threshold", str(thr),
-            "--ratio-threshold", str(ratio),
-            generate_graph=True,
-            graph_name="port_scan",
-        )
+        tab = self.anomaly_tab.port_scan_tab
+        args = [
+            "--threshold", str(tab.threshold_spin.value()),
+            "--ratio-threshold", str(tab.ratio_spin.value()),
+        ]
+        min_traffic_str = tab.min_traffic_edit.text().strip()
+        if min_traffic_str:
+            try:
+                min_traffic = self._scaled_bytes(min_traffic_str, tab.min_traffic_unit.currentIndex())
+                args += ["--min-traffic", str(min_traffic)]
+            except ValueError:
+                QMessageBox.warning(self, tr("port_scan_warning_title", "警告"),
+                                    tr("port_scan_min_traffic_int", "最小总流量必须为整数"))
+                return
+        self._execute_task("port-scan", *args, generate_graph=True, graph_name="port_scan")
 
     def run_ddos_detection(self):
         if not self.is_data_valid():
             return
         thr = self.anomaly_tab.ddos_tab.neighbor_spin.value()
-        base_cmd = self._core_command("ddos-target", "--threshold", str(thr))
+        base_cmd = self._core_command(
+            "ddos-target",
+            "--threshold", str(thr),
+            "--in-ratio-threshold", str(self.anomaly_tab.ddos_tab.in_ratio_spin.value()),
+        )
         traffic_str = self.anomaly_tab.ddos_tab.traffic_edit.text().strip()
         if traffic_str:
             try:

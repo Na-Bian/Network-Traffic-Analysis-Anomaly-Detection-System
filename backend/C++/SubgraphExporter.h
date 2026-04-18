@@ -121,13 +121,12 @@ public:
     }
 
     //将端口扫描攻击者集合导出为子图
-    void exportPortScannersAsSubgraph(const std::set<std::tuple<IPAddress, int, double> > &scanners,
+    void exportPortScannersAsSubgraph(const std::set<PortScanner> &scanners,
                                       const std::string &filename = "scanner_subgraph") const {
         std::vector<ConnectedComponents> components;
         //将每个端口扫描攻击者转换为一个连通分量
-        for (const auto &scannerIP: scanners | std::views::transform([](const auto &tup) {
-            return std::get<0>(tup);
-        })) {
+        for (const auto &scanner: scanners) {
+            const auto &scannerIP = scanner.ip;
             ConnectedComponents comp;
             const int scannerIndex = graph.findVertexIndex(scannerIP);
             if (scannerIndex == -1) continue; // 跳过找不到攻击者节点的IP地址
@@ -145,13 +144,12 @@ public:
     }
 
     //将DDoS攻击目标信息转换为一个子图
-    void exportDDoSTargetsAsSubgraph(const std::set<std::tuple<IPAddress, int, long long> > &targets,
+    void exportDDoSTargetsAsSubgraph(const std::set<DDoSTarget> &targets,
                                      const std::string &filename = "ddos_subgraph") const {
         std::vector<ConnectedComponents> components;
         //将每个DDoS攻击目标转换为一个连通分量
-        for (const auto &targetIP: targets | std::views::transform([](const auto &tup) {
-            return std::get<0>(tup);
-        })) {
+        for (const auto &target: targets) {
+            const auto &targetIP = target.ip;
             ConnectedComponents comp;
             const int targetIndex = graph.findVertexIndex(targetIP);
             if (targetIndex == -1) continue; // 跳过找不到攻击目标节点的IP地址

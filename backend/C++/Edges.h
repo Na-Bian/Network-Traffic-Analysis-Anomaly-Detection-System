@@ -10,6 +10,7 @@
 # include <ranges>
 # include <unordered_map>
 # include <vector>
+# include <map>
 
 
 //边集合类，管理每个节点的边列表
@@ -20,6 +21,7 @@ public:
 		long long dataSize = 0; // 数据包大小
 		double duration = 0.0; // 会话持续时间
 		std::set<std::pair<uint16_t, uint16_t> > ports; // 与该协议相关的端口号集合，存储所有通信使用过的源端口号和目的端口号的组合
+		std::map<std::pair<uint16_t, uint16_t>, long long> portTraffic; // 每个端口组合对应的累计流量
 	};
 
 	// 边的只读信息
@@ -106,12 +108,13 @@ public:
 			stats.dataSize += dataSize; // 更新协议的数据包大小
 			stats.duration += duration; // 更新协议的会话持续时间
 			stats.ports.insert({ srcPort, dstPort }); // 将源端口号添加到协议的源端口号集合中
+			stats.portTraffic[{ srcPort, dstPort }] += dataSize;
 			return;
 		}
 		//否则添加新边
 		edges.push_back({
 			dstIndex, dataSize, duration,
-			{{protocol, {dataSize, duration, {{srcPort, dstPort}}}}}
+			{{protocol, {dataSize, duration, {{srcPort, dstPort}}, {{{srcPort, dstPort}, dataSize}}}}}
 			}); // 列表初始化新边的目的IP地址索引、统计数据和协议统计数据
 		dstToIndex[dstIndex] = getEdgeCount() - 1; // 更新缓存，映射目的IP地址索引到新边的索引
 	}

@@ -16,6 +16,25 @@ def resource_path(relative_path):
     return str(base_path / relative_path)
 
 
+def core_executable_path():
+    """开发环境优先使用最近一次 CMake 构建的后端程序，打包环境使用随包资源。"""
+    packaged_path = Path(resource_path("backend/NetworkAnalyzerCore.exe"))
+    if hasattr(sys, "_MEIPASS"):
+        return str(packaged_path)
+
+    project_root = Path(__file__).resolve().parents[1]
+    candidates = [
+        packaged_path,
+        project_root / "backend" / "C++" / "cmake-build-debug-visual-studio" / "NetworkAnalyzerCore.exe",
+        project_root / "backend" / "C++" / "cmake-build-release-visual-studio" / "NetworkAnalyzerCore.exe",
+        project_root / "backend" / "C++" / "cmake-build-debug" / "NetworkAnalyzerCore.exe",
+    ]
+    existing = [path for path in candidates if path.exists()]
+    if not existing:
+        return str(packaged_path)
+    return str(max(existing, key=lambda path: path.stat().st_mtime))
+
+
 class TempDirManager:
     """管理临时目录，确保程序结束时自动清理"""
 

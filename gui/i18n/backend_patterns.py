@@ -12,10 +12,15 @@ def translate_violation_reason(reason):
         return ""
 
     clause_patterns = [
+        (r"通信匹配拒绝规则", "violation_deny_match"),
+        (r"对端IP([\d.]+)不在允许范围内", "violation_allow_ip_range"),
         (r"违反IP地址范围规则", "violation_ip_range"),
         (r"协议类型(\d+)违反规则", "violation_protocol"),
         (r"源端口(\d+)违反规则", "violation_src_port"),
         (r"目的端口(\d+)违反规则", "violation_dst_port"),
+        (r"协议类型(\d+)不在允许规则内", "violation_protocol_not_allowed"),
+        (r"源端口(\d+)不在允许规则内", "violation_src_port_not_allowed"),
+        (r"目的端口(\d+)不在允许规则内", "violation_dst_port_not_allowed"),
         (
             r"与([\d.]+)的通信流量为(\d+) bytes，超过了最大流量阈值(\d+) bytes",
             "violation_traffic",

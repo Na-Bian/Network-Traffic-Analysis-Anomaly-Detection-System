@@ -132,35 +132,32 @@ public:
                                              const long long traffic) const {
         std::string reason; //用于存储违规原因的字符串
         const bool inRange = other.getIP() >= IPRange.first.getIP() && other.getIP() <= IPRange.second.getIP();
+        const bool protocolMatch = protocol == 0 || recordProtocol == protocol;
+        const bool srcPortMatch = srcPort == 0 || recordSrcPort == srcPort;
+        const bool dstPortMatch = dstPort == 0 || recordDstPort == dstPort;
+        const bool ruleMatched = inRange && protocolMatch && srcPortMatch && dstPortMatch;
+
         if (type == RuleType::DENY) {
-            if (inRange) {
-                reason += "与" + other.toString() + "的通信违反IP地址范围规则;";
-            }
-            if (protocol != 0 && recordProtocol == protocol) {
-                reason += "协议类型" + std::to_string(protocol) + "违反规则;";
-            }
-            if (srcPort != 0 && recordSrcPort == srcPort) {
-                reason += "源端口" + std::to_string(srcPort) + "违反规则;";
-            }
-            if (dstPort != 0 && recordDstPort == dstPort) {
-                reason += "目的端口" + std::to_string(dstPort) + "违反规则;";
+            if (ruleMatched) {
+                reason += "通信匹配拒绝规则";
             }
         } else {
             if (!inRange) {
-                reason += "与" + other.toString() + "的通信违反IP地址范围规则;";
+                reason += "对端IP" + other.toString() + "不在允许范围内;";
             }
-            if (protocol != 0 && recordProtocol != protocol) {
+            if (!protocolMatch) {
                 reason += "协议类型" + std::to_string(recordProtocol) + "不在允许规则内;";
             }
-            if (srcPort != 0 && recordSrcPort != srcPort) {
+            if (!srcPortMatch) {
                 reason += "源端口" + std::to_string(recordSrcPort) + "不在允许规则内;";
             }
-            if (dstPort != 0 && recordDstPort != dstPort) {
+            if (!dstPortMatch) {
                 reason += "目的端口" + std::to_string(recordDstPort) + "不在允许规则内;";
             }
         }
         //检查记录中的流量是否超过规则定义的最大流量阈值
-        if (traffic > maxTraffic) {
+        if (ruleMatched && traffic > maxTraffic) {
+            if (!reason.empty() && reason.back() != ';') reason += ";";
             reason += "与" + other.toString() + "的通信流量为" + std::to_string(traffic) +
                     " bytes，超过了最大流量阈值" + std::to_string(maxTraffic) + " bytes.";
         }
@@ -191,8 +188,12 @@ public:
 
             for (const auto &[recordProtocol, stats]: edgeInfo.protocolStats) {
                 for (const auto &[recordSrcPort, recordDstPort]: stats.ports) {
+                    const auto portTrafficIt = stats.portTraffic.find({recordSrcPort, recordDstPort});
+                    const long long recordTraffic = portTrafficIt == stats.portTraffic.end()
+                                                        ? stats.dataSize
+                                                        : portTrafficIt->second;
                     if (std::string reason = checkViolation(
-                            otherIP, recordProtocol, recordSrcPort, recordDstPort, stats.dataSize);
+                            otherIP, recordProtocol, recordSrcPort, recordDstPort, recordTraffic);
                         !reason.empty()) {
                         violations.insert({srcIP, dstIP, recordProtocol, recordSrcPort, recordDstPort, reason});
                     }
