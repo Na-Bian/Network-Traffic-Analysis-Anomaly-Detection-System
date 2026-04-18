@@ -175,8 +175,10 @@ public:
         if (const int targetIdx = graph.findVertexIndex(targetIP); targetIdx != -1)
             nodes.insert(targetIdx);
         for (const auto &v: violations) {
-            if (const int neighborIdx = graph.findVertexIndex(v.getDstIP()); neighborIdx != -1)
-                nodes.insert(neighborIdx);
+            if (const int srcIdx = graph.findVertexIndex(v.getSrcIP()); srcIdx != -1)
+                nodes.insert(srcIdx);
+            if (const int dstIdx = graph.findVertexIndex(v.getDstIP()); dstIdx != -1)
+                nodes.insert(dstIdx);
         }
         // 构建子图，包含违规节点之间的边
         ConnectedComponents comp;

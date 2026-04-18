@@ -1,0 +1,27 @@
+# CLion / JetBrains
+.idea/
+cmake-build*/
+
+# Visual Studio / MSVC
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.exe
+*.tlog
+*.recipe
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.slnx
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# OS
+.DS_Store
+Thumbs.db

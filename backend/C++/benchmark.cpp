@@ -1,11 +1,12 @@
-#include <chrono>
-#include <iostream>
-#include <vector>
-#include <iomanip>
-#include "Graph.h"
-#include "CSVReader.h"
+# include <chrono>
+# include <iomanip>
+# include <iostream>
+# include <string>
+# include <vector>
 
-// 计时器辅助类
+# include "CSVReader.h"
+# include "Graph.h"
+
 class Timer {
     std::chrono::high_resolution_clock::time_point start;
 
@@ -20,7 +21,6 @@ public:
 };
 
 void runPerformanceBenchmark(const std::string &csvPath) {
-    // 测试的线程数序列
     const std::vector threadCounts = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
     };
@@ -32,15 +32,12 @@ void runPerformanceBenchmark(const std::string &csvPath) {
     std::cout << std::string(60, '-') << std::endl;
 
     for (const int t: threadCounts) {
-        // --- 测试 1: CSVReader (全局锁写入) ---
         CSVReader reader(csvPath, t);
 
         Timer t1;
-        Graph g = reader.readCSV(); // 数据加载
+        Graph g = reader.readCSV();
         const double csvTime = t1.elapsed_ms();
 
-        // --- 测试 2: analyzeNeighbors (细粒度锁) ---
-        // 为了测试分析速度，我们需要一个已经加载好数据的图
         Timer t2;
         auto neighbors = g.analyzeNeighbors(t);
         const double analysisTime = t2.elapsed_ms();
@@ -52,8 +49,12 @@ void runPerformanceBenchmark(const std::string &csvPath) {
     std::cout << "============================================================\n";
 }
 
+int main(const int argc, char *argv[]) {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <csv-path>\n";
+        return 1;
+    }
 
-int main() {
-    runPerformanceBenchmark(R"(C:\Users\Na_Bian\Desktop\NetworkAnalyzer\111_converted.csv)");
+    runPerformanceBenchmark(argv[1]);
     return 0;
 }

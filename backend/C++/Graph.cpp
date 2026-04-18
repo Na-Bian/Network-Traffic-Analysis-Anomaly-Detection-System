@@ -57,7 +57,7 @@ void Graph::addRecord(const IPAddress &srcIP, const IPAddress &dstIP, const uint
     verticesList.updateInData(dstIndex, dataSize); // 更新目的节点的总入流量
 
     //检查是否为HTTPS连接
-    if (protocol == 6 && dstPort == 443 || srcPort == 443) {
+    if (protocol == 6 && (srcPort == 443 || dstPort == 443)) {
         verticesList.updateHTTPSData(srcIndex, dataSize); // 更新源节点的总HTTPS流量
         verticesList.updateHTTPSData(dstIndex, dataSize); // 更新目的节点的总HTTPS流量
     }
@@ -95,7 +95,7 @@ set<tuple<IPAddress, int, double> > Graph::detectPortScanners(const int portThre
                 });
                 if (it != ratio.end()) {
                     // 将攻击者的IP地址、不同目的端口数量和出流量占比添加到结果集合中
-                    scanners.insert({verticesList.getIP(i), uniqueDstPorts.size(), get<2>(*it)});
+                    scanners.insert({verticesList.getIP(i), static_cast<int>(uniqueDstPorts.size()), get<2>(*it)});
                 }
                 break;
             }
@@ -114,7 +114,7 @@ set<tuple<IPAddress, int, long long> > Graph::detectDDoSTargets(const int neighb
     for (int i = 0; i < n; ++i) {
         if (verticesList.getTotalInData(i) > inDataThreshold && allNeighbors[i].size() > neighborThreshold) {
             //如果节点的入流量超过指定阈值，并且与大量不同的邻居节点通信，则判定为DDoS攻击目标
-            targets.insert({verticesList.getIP(i), allNeighbors[i].size(), verticesList.getTotalInData(i)});
+            targets.insert({verticesList.getIP(i), static_cast<int>(allNeighbors[i].size()), verticesList.getTotalInData(i)});
         }
     }
 
@@ -123,6 +123,7 @@ set<tuple<IPAddress, int, long long> > Graph::detectDDoSTargets(const int neighb
 
 //分析图中所有节点的邻居信息
 vector<unordered_map<int, NeighborInfo> > Graph::analyzeNeighbors(const unsigned int numThreads) const {
+    const unsigned int threadCount = numThreads == 0 ? 1 : numThreads;
     const int n = verticesList.getVertexCount(); // 获取节点数量
     //创建一个列表用于存储每个节点的邻居信息，邻居信息以字典形式存储，
     //键为邻居节点索引，值为一个结构体，包含与邻居节点通信使用过的源端口号集合、目的端口号集合和总流量
@@ -134,13 +135,13 @@ vector<unordered_map<int, NeighborInfo> > Graph::analyzeNeighbors(const unsigned
 
     vector<future<void> > futures; // 存储线程的future对象
 
-    const int base = n / static_cast<int>(numThreads); // 计算每个线程需要处理的节点数量
-    const int remainder = n % static_cast<int>(numThreads); // 计算剩余的节点数量
+    const int base = n / static_cast<int>(threadCount); // 计算每个线程需要处理的节点数量
+    const int remainder = n % static_cast<int>(threadCount); // 计算剩余的节点数量
 
     //分块并行处理每个节点的邻居信息
     int start = 0; // 当前线程处理的起始节点索引
     int end = -1; // 当前线程处理的结束节点索引
-    for (int i = 0; i < static_cast<int>(numThreads); ++i) {
+    for (int i = 0; i < static_cast<int>(threadCount); ++i) {
         //前remainder个线程处理base+1个节点，剩余线程处理base个节点
         const int nodesToRead = i < remainder ? base + 1 : base;
         start = end + 1;

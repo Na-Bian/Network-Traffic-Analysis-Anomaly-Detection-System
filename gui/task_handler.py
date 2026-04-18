@@ -307,7 +307,8 @@ class TaskHandler(QObject):
                 ips = re.findall(r'\d+\.\d+\.\d+\.\d+', ip_part)
                 if ips:
                     formatted = " → ".join(ips)
-                    metric_match = re.search(r'congestion=([\d.]+)', line)
+                    metric_pattern = r'risk=([\d.]+)' if task_type == "min-risk" else r'congestion=([\d.]+)'
+                    metric_match = re.search(metric_pattern, line)
                     if metric_match:
                         metric_val = metric_match.group(1)
                         formatted += f" <span style='color:#7f8c8d;'>({metric_label.format(metric_val)})</span>"
@@ -331,9 +332,9 @@ class TaskHandler(QObject):
         colors = {"最小拥塞": "#e74c3c", "最小跳数": "#3498db", "最小风险": "#2ecc71"}
 
         stats = {
-            "最小拥塞": {"count": 0, "congestions": [], "metric": None},  # 增加 metric 字段
-            "最小跳数": {"count": 0, "congestions": [], "metric": None},
-            "最小风险": {"count": 0, "congestions": [], "metric": None}
+            "最小拥塞": {"count": 0, "values": [], "metric": None},
+            "最小跳数": {"count": 0, "values": [], "metric": None},
+            "最小风险": {"count": 0, "values": [], "metric": None}
         }
 
         current_section = None
@@ -366,10 +367,11 @@ class TaskHandler(QObject):
             if current_section and "|" in line and re.search(r'\d+\.\d+\.\d+\.\d+', line):
                 path_found = True
                 stats[current_section]["count"] += 1
-                congestion_match = re.search(r'congestion=([\d.]+)', line)
-                if congestion_match:
-                    val = float(congestion_match.group(1))
-                    stats[current_section]["congestions"].append(val)
+                metric_pattern = r'risk=([\d.]+)' if current_section == "最小风险" else r'congestion=([\d.]+)'
+                metric_match = re.search(metric_pattern, line)
+                if metric_match:
+                    val = float(metric_match.group(1))
+                    stats[current_section]["values"].append(val)
                 path_lines.append((current_section, line))
 
         if not path_found:
@@ -384,14 +386,12 @@ class TaskHandler(QObject):
         html += "<th style='padding:8px; border:1px solid #ddd; text-align:center;'>" + \
                 tr("compare_paths_table_header_count", "路径数量") + "</th>"
         html += "<th style='padding:8px; border:1px solid #ddd; text-align:center;'>" + \
-                tr("compare_paths_table_header_congestion_range", "拥塞值范围(Min ~ Max)") + "</th></tr>"
-
-        congestion_label = tr("compare_paths_congestion_label", "拥塞值: {}")
+                tr("compare_paths_table_header_metric_range", "指标范围(Min ~ Max)") + "</th></tr>"
 
         for strategy, data in stats.items():
             color = colors[strategy]
             display_name = strategy_names[strategy]
-            vals = data["congestions"]
+            vals = data["values"]
             if not vals:
                 cong_display = "N/A"
             else:
@@ -428,9 +428,12 @@ class TaskHandler(QObject):
             ips = re.findall(r'\d+\.\d+\.\d+\.\d+', parts[0])
             if ips:
                 formatted = " → ".join(ips)
-                c_match = re.search(r'congestion=([\d.]+)', line)
-                if c_match:
-                    formatted += f" <span style='color:#7f8c8d;'>({tr('compare_paths_congestion_label', '拥塞值: {}').format(c_match.group(1))})</span>"
+                metric_pattern = r'risk=([\d.]+)' if strategy == "最小风险" else r'congestion=([\d.]+)'
+                metric_match = re.search(metric_pattern, line)
+                if metric_match:
+                    label_key = "compare_paths_risk_label" if strategy == "最小风险" else "compare_paths_congestion_label"
+                    label_fallback = "风险值: {}" if strategy == "最小风险" else "拥塞值: {}"
+                    formatted += f" <span style='color:#7f8c8d;'>({tr(label_key, label_fallback).format(metric_match.group(1))})</span>"
                 html += f"<p style='margin-left:20px; font-family:monospace;'>{formatted}</p>"
 
         if current_section:

@@ -1,6 +1,11 @@
 ﻿// main.cpp
 
-# include <windows.h>
+# ifdef _WIN32
+#  ifndef NOMINMAX
+#   define NOMINMAX
+#  endif
+#  include <windows.h>
+# endif
 # include "Graph.h"
 # include "CSVReader.h"
 # include "CustomRule.h"
@@ -38,6 +43,7 @@ void printUsage(const char *progName) {
             << "  --threshold <num>                 阈值（端口扫描、DDoS、星型结构）\n"
             << "  --in-data-threshold <num>         入流量阈值（DDoS）\n"
             << "  --threads <num>                   线程数（默认CPU核心数）\n"
+            << "  --max-paths <num>                 最多输出的等价路径数量（默认100）\n"
             << "  --rule-target <ip>                自定义规则：目标IP\n"
             << "  --range-cidr <cidr>               自定义规则：CIDR范围\n"
             << "  --range-start <ip>                自定义规则：起始IP（与--range-end配合）\n"
@@ -66,8 +72,8 @@ int main(int argc, char *argv[]) {
         long long maxTraffic = (numeric_limits<long long>::max)();
         bool hasCIDR = false, hasStartEnd = false;
         int threshold = 0;
-        const int cpuCount = static_cast<int>(thread::hardware_concurrency());
-        int threads = cpuCount >= 4 ? 4 : cpuCount; //默认线程数为4
+        int threads = static_cast<int>(Graph::defaultThreadCount()); //默认线程数为4
+        size_t maxPaths = DEFAULT_MAX_PATHS;
 
         // 解析参数
         for (int i = 1; i < argc; ++i) {
@@ -87,6 +93,9 @@ int main(int argc, char *argv[]) {
             } else if (arg == "--threads" && i + 1 < argc) {
                 threads = stoi(argv[++i]);
                 if (threads < 1) threads = 1;
+            } else if (arg == "--max-paths" && i + 1 < argc) {
+                maxPaths = stoull(argv[++i]);
+                if (maxPaths < 1) maxPaths = 1;
             } else if (arg == "--output-json" && i + 1 < argc) {
                 outputJsonFile = argv[++i];
             } else if (arg == "--sort-type" && i + 1 < argc) {
@@ -181,7 +190,7 @@ int main(int argc, char *argv[]) {
                 cerr << "错误: min-congestion 需要 --src 和 --dst\n";
                 return 1;
             }
-            auto paths = graph.minCongestion(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()));
+            auto paths = graph.minCongestion(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), maxPaths);
             cout << "最小拥塞路径 (共 " << paths.size() << " 条):\n";
             if (paths.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -202,7 +211,7 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
             int minHopCount;
-            auto paths = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount);
+            auto paths = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount, maxPaths);
             cout << "最小跳数路径 (最小跳数 = " << minHopCount << "):\n";
             if (paths.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -223,15 +232,16 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
             double minRiskLevel;
-            auto paths = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel);
+            auto paths = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel,
+                                             maxPaths);
             cout << "最小风险路径 (最小风险值 = " << minRiskLevel << "):\n";
             if (paths.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
             } else {
-                for (const auto &[path, congestion]: paths) {
+                for (const auto &[path, risk]: paths) {
                     for (int idx: path)
                         cout << graph.getVertexIP(idx).toString() << " ";
-                    cout << "| congestion=" << congestion << "\n";
+                    cout << "| risk=" << risk << "\n";
                 }
             }
             if (!outputJsonFile.empty()) {
@@ -248,7 +258,7 @@ int main(int argc, char *argv[]) {
 
             // 分别获取三种路径
             // 最小拥塞路径
-            auto pathsCong = graph.minCongestion(src, dst);
+            auto pathsCong = graph.minCongestion(src, dst, maxPaths);
             cout << "最小拥塞路径 (共 " << pathsCong.size() << " 条):\n";
             if (pathsCong.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -262,7 +272,7 @@ int main(int argc, char *argv[]) {
 
             // 最小跳数路径
             int minHopCount;
-            auto pathsHop = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount);
+            auto pathsHop = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount, maxPaths);
             cout << "最小跳数路径 (最小跳数 = " << minHopCount << "):\n";
             if (pathsHop.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -276,15 +286,16 @@ int main(int argc, char *argv[]) {
 
             // 最小风险路径
             double minRiskLevel;
-            auto pathsRisk = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel);
+            auto pathsRisk = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel,
+                                                 maxPaths);
             cout << "最小风险路径 (最小风险值 = " << minRiskLevel << "):\n";
             if (pathsRisk.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
             } else {
-                for (const auto &[path, congestion]: pathsRisk) {
+                for (const auto &[path, risk]: pathsRisk) {
                     for (int idx: path)
                         cout << graph.getVertexIP(idx).toString() << " ";
-                    cout << "| congestion=" << congestion << "\n";
+                    cout << "| risk=" << risk << "\n";
                 }
             }
 
@@ -338,7 +349,7 @@ int main(int argc, char *argv[]) {
         } else if (task == "custom-rule") {
             // 验证必要参数
             if (ruleTarget.empty()) {
-                cerr << "错误: custom-rule 需要 --rule-src\n";
+                cerr << "错误: custom-rule 需要 --rule-target\n";
                 return 1;
             }
             if (!hasCIDR && !(hasStartEnd && !rangeStart.empty() && !rangeEnd.empty())) {

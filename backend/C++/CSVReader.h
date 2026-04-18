@@ -14,6 +14,9 @@
 # include <iostream>
 # include <thread>
 # include <utility>
+# include <limits>
+# include <algorithm>
+# include <cctype>
 
 
 class CSVReader {
@@ -22,10 +25,79 @@ class CSVReader {
     unsigned int totalLines = 0; // CSV文件的总行数
     unsigned int numThreads = 1; //用于读取和处理CSV文件的线程数量
 
-    //辅助函数getNextField用于从数据的每一行中提取下一个字段，直到行末
-    static std::string getNextField(std::stringstream &ss) {
+    struct Record {
+        IPAddress srcIP;
+        IPAddress dstIP;
+        uint8_t protocol;
+        uint16_t srcPort;
+        uint16_t dstPort;
+        int dataSize;
+        double duration;
+    };
+
+    // 辅助函数trim用于去除字符串首尾的空白字符
+    static std::string trim(const std::string &value) {
+        const auto begin = std::ranges::find_if_not(value, [](const unsigned char ch) {
+            return std::isspace(ch) != 0;
+        });
+        // 用反向迭代器从字符串尾部逆向查找第一个非空白字符的位置
+        const auto end = std::find_if_not(value.rbegin(), value.rend(), [](const unsigned char ch) {
+            return std::isspace(ch) != 0;
+        }).base(); //转换为正向迭代器
+        return begin < end ? std::string(begin, end) : "";
+    }
+
+    static std::vector<std::string> splitCSVLine(const std::string &line) {
+        std::vector<std::string> fields;
+        std::stringstream ss(line);
         std::string field;
-        return getline(ss, field, ',') ? field : ""; // 如果内容为空，返回空字符串
+        while (std::getline(ss, field, ',')) {
+            fields.push_back(trim(field));
+        }
+        if (!line.empty() && line.back() == ',') fields.emplace_back();
+        return fields;
+    }
+
+    static int parseIntInRange(const std::string &value, const int minValue, const int maxValue,
+                               const std::string &fieldName) {
+        size_t pos = 0;
+        const int parsed = std::stoi(value, &pos);
+        if (pos != value.size()) throw std::invalid_argument(fieldName + "包含非数字字符: " + value);
+        if (parsed < minValue || parsed > maxValue) {
+            throw std::out_of_range(fieldName + "超出范围: " + value);
+        }
+        return parsed;
+    }
+
+    static double parseNonNegativeDouble(const std::string &value, const std::string &fieldName) {
+        size_t pos = 0;
+        const double parsed = std::stod(value, &pos);
+        if (pos != value.size()) throw std::invalid_argument(fieldName + "包含非法字符: " + value);
+        if (parsed < 0) throw std::out_of_range(fieldName + "不能为负数: " + value);
+        return parsed;
+    }
+
+    static Record parseRecord(const std::string &line) {
+        const auto fields = splitCSVLine(line);
+        if (fields.size() != 7) {
+            throw std::invalid_argument("字段数量应为7，实际为" + std::to_string(fields.size()));
+        }
+        if (fields[0].empty() || fields[1].empty() || fields[2].empty()) {
+            throw std::invalid_argument("源IP、目的IP和协议字段不能为空");
+        }
+
+        const int protocol = parseIntInRange(fields[2], 0, 255, "协议号");
+        const int srcPort = fields[3].empty() ? 0 : parseIntInRange(fields[3], 0, 65535, "源端口");
+        const int dstPort = fields[4].empty() ? 0 : parseIntInRange(fields[4], 0, 65535, "目的端口");
+        const int dataSize = fields[5].empty()
+                                 ? 0
+                                 : parseIntInRange(fields[5], 0, (std::numeric_limits<int>::max)(), "数据大小");
+        const double duration = fields[6].empty() ? 0.0 : parseNonNegativeDouble(fields[6], "持续时间");
+
+        return {
+            IPAddress(fields[0]), IPAddress(fields[1]), static_cast<uint8_t>(protocol),
+            static_cast<uint16_t>(srcPort), static_cast<uint16_t>(dstPort), dataSize, duration
+        };
     }
 
     //辅助函数readNextLines用于从CSV文件中读取若干行数据
@@ -44,8 +116,7 @@ class CSVReader {
 public:
     //构造函数，接受CSV文件名
     explicit CSVReader(std::string fileName = "network_data.csv",
-                       const unsigned int threads =
-                               std::thread::hardware_concurrency() >= 4 ? 4 : std::thread::hardware_concurrency())
+                       const unsigned int threads = Graph::defaultThreadCount())
         : CSVFile(std::move(fileName)), numThreads(threads) {
         std::ifstream fin(CSVFile, std::ios::binary | std::ios::ate); //以二进制模式打开CSV文件，并将文件指针移动到文件末尾
         if (threads < 1) throw std::invalid_argument("线程数量必须至少为1");
@@ -64,18 +135,13 @@ public:
         unsigned int linesCount = 0; // 统计总行数
         while (std::getline(fin, line)) {
             ++linesCount;
-            std::stringstream ss(line);
-            std::string srcIPStr = getNextField(ss);
-            std::string dstIPStr = getNextField(ss);
-            // 跳过空字段
-            if (srcIPStr.empty() || dstIPStr.empty()) continue;
-
-            // 转换为整数IP并插入集合
             try {
-                uniqueIPs.insert(IPAddress(srcIPStr).getIP());
-                uniqueIPs.insert(IPAddress(dstIPStr).getIP());
+                const Record record = parseRecord(line);
+                uniqueIPs.insert(record.srcIP.getIP());
+                uniqueIPs.insert(record.dstIP.getIP());
             } catch (const std::exception &e) {
-                std::cout << "数据行格式错误: " << line << " 错误信息: " << e.what() << std::endl;
+                std::cout << "数据行格式错误(第" << linesCount + 1 << "行): " << line
+                        << " 错误信息: " << e.what() << std::endl;
             }
         }
 
@@ -90,57 +156,44 @@ public:
         fin.open(CSVFile);
         std::getline(fin, line); // 跳过标题行
 
-        std::mutex graphMutex; //用于保护Graph对象的互斥锁，确保多线程访问Graph对象时的线程安全
-        std::vector<std::future<void> > futures; //存储线程的future对象
+        std::vector<std::future<std::vector<Record> > > futures; //存储线程的future对象
 
         const unsigned int base = linesCount / numThreads; //计算每个线程需要处理的行数
         const unsigned int remainder = linesCount % numThreads; //计算余数
 
         //分块并行读取和处理CSV文件
+        unsigned int firstLineInChunk = 2;
         for (unsigned int i = 0; i < numThreads; ++i) {
             const unsigned int linesToRead = (i < remainder) ? base + 1 : base; //前remainder个线程处理base+1行，其他线程处理base行
             if (linesToRead == 0) continue;
+            const unsigned int chunkFirstLine = firstLineInChunk;
             std::string chunk = readNextLines(fin, linesToRead); // 读取若干行数据作为一个块
-            futures.push_back(std::async(std::launch::async, [chunk, &graph, &graphMutex]() {
+            firstLineInChunk += linesToRead;
+            futures.push_back(std::async(std::launch::async, [chunk, chunkFirstLine]() {
                 std::stringstream ss(chunk); //将块数据转换为字符串流，逐行解析
                 std::string string;
+                unsigned int lineNumber = chunkFirstLine;
+                std::vector<Record> records;
 
                 while (std::getline(ss, string)) {
-                    std::stringstream lineStream(string);
-                    std::string srcIPStr = getNextField(lineStream);
-                    std::string dstIPStr = getNextField(lineStream);
-                    std::string protocolStr = getNextField(lineStream);
-                    std::string srcPortStr = getNextField(lineStream);
-                    std::string dstPortStr = getNextField(lineStream);
-                    std::string dataSizeStr = getNextField(lineStream);
-                    std::string durationStr = getNextField(lineStream);
-
-                    // 数据有效性验证和转换
-                    if (srcIPStr.empty() || dstIPStr.empty() || protocolStr.empty()) {
-                        std::cout << "数据行格式错误: " << string << std::endl;
-                        continue;
-                    }
-
                     try {
-                        uint8_t protocol = std::stoi(protocolStr);
-                        uint16_t srcPort = srcPortStr.empty() ? 0 : static_cast<uint16_t>(std::stoi(srcPortStr));
-                        uint16_t dstPort = dstPortStr.empty() ? 0 : static_cast<uint16_t>(std::stoi(dstPortStr));
-                        int dataSize = dataSizeStr.empty() ? 0 : std::stoi(dataSizeStr);
-                        double duration = durationStr.empty() ? 0.0 : std::stod(durationStr);
-                        IPAddress srcIP(srcIPStr.c_str());
-                        IPAddress dstIP(dstIPStr.c_str());
-
-                        std::lock_guard lock(graphMutex); // 加锁，确保线程安全地访问Graph对象
-
-                        graph.addRecord(srcIP, dstIP, protocol, srcPort, dstPort, dataSize, duration);
+                        records.push_back(parseRecord(string));
                     } catch (const std::exception &e) {
-                        std::cout << "数据行格式错误: " << string << " 错误信息: " << e.what() << std::endl;
+                        std::cout << "数据行格式错误(第" << lineNumber << "行): " << string
+                                << " 错误信息: " << e.what() << std::endl;
                     }
+                    ++lineNumber;
                 }
+                return records;
             }));
         }
 
-        for (auto &f: futures) f.wait(); // 等待所有块解析完成
+        for (auto &f: futures) {
+            for (const auto &record: f.get()) {
+                graph.addRecord(record.srcIP, record.dstIP, record.protocol, record.srcPort, record.dstPort,
+                                record.dataSize, record.duration);
+            }
+        }
 
         fin.close();
         return graph;

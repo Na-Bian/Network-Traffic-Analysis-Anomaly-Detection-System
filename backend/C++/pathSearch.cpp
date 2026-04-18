@@ -13,7 +13,8 @@ using namespace std;
 //函数buildPaths通过DFS算法从目标节点b回溯到起始节点a，构建所有最小拥塞路径
 //参数：当前节点curr，起始节点a，前驱节点列表prev，当前路径path，所有最小拥塞路径列表all_paths
 void buildPaths(const int curr, const int a, const vector<vector<int> > &prev, vector<int> &currPath,
-                vector<vector<int> > &allPaths) {
+                vector<vector<int> > &allPaths, const size_t maxPaths) {
+    if (allPaths.size() >= maxPaths) return;
     currPath.push_back(curr); //将当前节点索引添加到当前路径中
     if (curr == a) {
         //如果当前节点是起始节点a，说明已经构建出一条完整的路径，将当前路径添加到所有路径列表中
@@ -23,7 +24,8 @@ void buildPaths(const int curr, const int a, const vector<vector<int> > &prev, v
     } else {
         //如果当前节点不是起始节点a，继续回溯到前驱节点列表中的每个前驱节点，递归调用buildPaths函数构建路径
         for (const int prev_node: prev[curr]) {
-            buildPaths(prev_node, a, prev, currPath, allPaths); //递归调用，继续回溯到前驱节点
+            buildPaths(prev_node, a, prev, currPath, allPaths, maxPaths); //递归调用，继续回溯到前驱节点
+            if (allPaths.size() >= maxPaths) break;
         }
     }
     currPath.pop_back(); //回溯完成后，将当前节点索引从当前路径中移除，继续构建其他路径
@@ -43,7 +45,8 @@ struct Element {
 // 参数：起始节点a的IP地址、目标节点b的IP地址、一个引用参数minCostLevel用于返回最小代价路径的总代价水平，以及一个匿名函数costFunc用于计算边的代价
 // 返回值：所有最小代价路径的列表，每条路径由节点索引的列表表示
 vector<vector<int> > minCost(const Graph &graph, const IPAddress &ipa, const IPAddress &ipb,
-                             double &minCostLevel, const function<double(const Edges::EdgeInfo &)> &costFunc) {
+                             double &minCostLevel, const function<double(const Edges::EdgeInfo &)> &costFunc,
+                             const size_t maxPaths) {
     //搜索起始节点a和目标节点b的索引
     const int a = graph.findVertexIndex(ipa);
     const int b = graph.findVertexIndex(ipb);
@@ -110,14 +113,14 @@ vector<vector<int> > minCost(const Graph &graph, const IPAddress &ipa, const IPA
     //从目标节点b回溯到起始节点a，构建所有最小拥塞路径
     vector<vector<int> > allPaths; //存储所有最小拥塞路径的列表
     vector<int> currPath; //存储当前路径的节点索引列表
-    buildPaths(b, a, prev, currPath, allPaths); //调用辅助函数构建路径
+    buildPaths(b, a, prev, currPath, allPaths, maxPaths); //调用辅助函数构建路径
 
     return allPaths; //返回所有最小拥塞路径的列表
 }
 
 
 //寻找图中从a节点到b节点的最小拥塞路径
-vector<PathInfo> Graph::minCongestion(const IPAddress &ipa, const IPAddress &ipb) const {
+vector<PathInfo> Graph::minCongestion(const IPAddress &ipa, const IPAddress &ipb, const size_t maxPaths) const {
     double minCongestionLevel; //定义一个变量来存储最小拥塞水平
     //调用通用函数minCost，传入计算边拥塞水平的代价函数，返回最小拥塞路径
     const auto paths = minCost(*this, ipa, ipb, minCongestionLevel, [](const Edges::EdgeInfo &edge) {
@@ -125,7 +128,7 @@ vector<PathInfo> Graph::minCongestion(const IPAddress &ipa, const IPAddress &ipb
         return edge.totalDuration > 0
                    ? static_cast<double>(edge.totalDataSize) / static_cast<double>(edge.totalDuration)
                    : numeric_limits<double>::max();
-    });
+    }, maxPaths);
     //从paths构建路径信息列表，包含路径和路径的拥塞水平
     vector<PathInfo> pathInfos; //存储路径信息的列表
     for (const auto &path: paths) {
@@ -164,11 +167,12 @@ vector<PathInfo> buildPathInfos(const Graph &graph, const vector<vector<int> > &
 }
 
 //寻找图中从a节点到b节点的最小跳数路径
-vector<PathInfo> Graph::minHop(const IPAddress &ipa, const IPAddress &ipb, int &minHopCount) const {
+vector<PathInfo> Graph::minHop(const IPAddress &ipa, const IPAddress &ipb, int &minHopCount,
+                               const size_t maxPaths) const {
     double minCostLevel; //定义一个变量来存储最小拥塞水平
     vector<vector<int> > paths = minCost(*this, ipa, ipb, minCostLevel, [](const Edges::EdgeInfo &) {
         return 1.0; //边的代价定义为1，表示每条边的跳数为1
-    });
+    }, maxPaths);
     minHopCount = minCostLevel == numeric_limits<double>::max()
                       ? numeric_limits<int>::max()
                       : static_cast<int>(minCostLevel); //设置最小跳数，如果无法到达则设置为无穷大
@@ -176,15 +180,21 @@ vector<PathInfo> Graph::minHop(const IPAddress &ipa, const IPAddress &ipb, int &
 }
 
 //重载函数，寻找图中从a节点到b节点的最小跳数路径，不返回最小跳数水平
-vector<PathInfo> Graph::minHop(const IPAddress &ipa, const IPAddress &ipb) const {
+vector<PathInfo> Graph::minHop(const IPAddress &ipa, const IPAddress &ipb, const size_t maxPaths) const {
     int minHopCount; //定义一个变量来存储最小跳数
-    return minHop(ipa, ipb, minHopCount); //调用重载的minHop函数，返回最小跳数路径信息列表
+    return minHop(ipa, ipb, minHopCount, maxPaths); //调用重载的minHop函数，返回最小跳数路径信息列表
 }
 
 //寻找图中从a节点到b节点的最小代价路径，代价由匿名函数costFunc(Edge)自定义
 std::vector<PathInfo> Graph::minCostCustom(const IPAddress &ipa, const IPAddress &ipb, double &minCostLevel,
+                                           const size_t maxPaths,
                                            const std::function<double(const Edges::EdgeInfo &)> &costFunc) const {
     //调用通用函数minCost，传入自定义的代价函数，返回最小代价路径
-    const auto paths = minCost(*this, ipa, ipb, minCostLevel, costFunc);
-    return buildPathInfos(*this, paths); //从路径列表中构建路径信息列表，包含路径和路径的拥塞水平
+    const auto paths = minCost(*this, ipa, ipb, minCostLevel, costFunc, maxPaths);
+    vector<PathInfo> pathInfos;
+    pathInfos.reserve(paths.size());
+    for (const auto &path: paths) {
+        pathInfos.push_back({path, minCostLevel});
+    }
+    return pathInfos; //返回路径信息列表，其中指标为自定义代价
 }

@@ -5,8 +5,9 @@
 # ifndef NetworkAnalyzer_GRAPH_H
 # define NetworkAnalyzer_GRAPH_H
 
-# include "vertices.h"
+# include "Vertices.h"
 
+# include <algorithm>
 # include <functional>
 # include <cmath>
 # include <thread>
@@ -16,6 +17,8 @@ struct PathInfo {
     std::vector<int> path; //路径上节点索引的列表
     double congestionLevel; //路径的拥塞水平
 };
+
+inline constexpr size_t DEFAULT_MAX_PATHS = 100;
 
 //邻居信息表示，包含与邻居节点通信使用过的所有源端口号和目的端口号的组合，以及对邻居而言的入流量和出流量
 struct NeighborInfo {
@@ -63,6 +66,11 @@ public:
     // 默认构造函数返回一个空图
     Graph() = default;
 
+    static unsigned int defaultThreadCount() {
+        const unsigned int count = std::thread::hardware_concurrency();
+        return count == 0 ? 1 : std::min(4u, count);
+    }
+
     // 基本查询接口
     [[nodiscard]] int getVertexCount() const { return verticesList.getVertexCount(); }
 
@@ -109,19 +117,22 @@ public:
     //函数minCongestion用于寻找图中从a节点到b节点的最小拥塞路径
     //参数：起始节点a的IP地址、目标节点b的IP地址
     //返回值：所有最小拥塞路径的列表，每条路径表示为一个包含路径上节点索引的列表和路径的拥塞水平
-    [[nodiscard]] std::vector<PathInfo> minCongestion(const IPAddress &ipa, const IPAddress &ipb) const;
+    [[nodiscard]] std::vector<PathInfo> minCongestion(const IPAddress &ipa, const IPAddress &ipb,
+                                                      size_t maxPaths = DEFAULT_MAX_PATHS) const;
 
     //函数minHop用于寻找图中从a节点到b节点的最小跳数路径
     //参数：图对象、起始节点a的IP地址、目标节点b的IP地址
     //返回值：所有最小跳数路径信息的列表，每条路径信息包含路径上节点索引的列表和路径的拥塞水平
-    [[nodiscard]] std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb) const;
+    [[nodiscard]] std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb,
+                                               size_t maxPaths = DEFAULT_MAX_PATHS) const;
 
     //重载函数minHop，增加参数minHopCount用于返回最小跳数路径的跳数
-    std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb, int &minHopCount) const;
+    std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb, int &minHopCount,
+                                 size_t maxPaths = DEFAULT_MAX_PATHS) const;
 
     //函数minCostCustom用于寻找图中从a节点到b节点的最小代价路径，代价由匿名函数costFunc(Edge)自定义，默认基于边的安全性
     std::vector<PathInfo> minCostCustom(
-        const IPAddress &ipa, const IPAddress &ipb, double &minCostLevel,
+        const IPAddress &ipa, const IPAddress &ipb, double &minCostLevel, size_t maxPaths = DEFAULT_MAX_PATHS,
         const std::function<double(const Edges::EdgeInfo &)> &costFunc = [](const Edges::EdgeInfo &edge) {
             const double base = Edges::isSecure(edge) ? 1.0 : 10.0; // 安全边的代价为1，不安全边的代价为10
 
@@ -138,7 +149,7 @@ public:
     //计算图中所有节点的邻居信息
     //返回值：一个包含邻居索引和邻居信息的字典列表
     [[nodiscard]] std::vector<std::unordered_map<int, NeighborInfo> > analyzeNeighbors(
-        unsigned int numThreads = std::thread::hardware_concurrency() >= 4 ? 4 : std::thread::hardware_concurrency())
+        unsigned int numThreads = defaultThreadCount())
     const;
 
     //重载函数analyzeNeighbors，查找单个节点的邻居信息
