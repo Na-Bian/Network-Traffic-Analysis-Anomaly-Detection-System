@@ -25,7 +25,7 @@ a = Analysis(
         ('backend/readPcap.py', 'backend'),
         ('backend/subgraph.py', 'backend'),
         ('resources', 'resources'),
-        ('lang_config.json', '.'),   # 加入语言配置文件
+        ('gui/i18n/locales', 'gui/i18n/locales'),
     ] + pyvis_datas,
     hiddenimports=pyvis_hiddenimports + additional_hiddenimports,
     hookspath=[],
