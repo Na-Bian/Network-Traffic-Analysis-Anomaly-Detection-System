@@ -883,17 +883,21 @@ class MainWindow(QMainWindow):
         self.web_view.update()
 
     # ---------- 任务执行槽函数 ----------
+    @staticmethod
+    def _core_command(task, *args):
+        return [
+            resource_path("backend/NetworkAnalyzerCore.exe"),
+            "--task", task,
+            *args,
+        ]
+
     def run_flow_sort(self):
         if not self.is_data_valid():
             return
         index = self.flow_sort_tab.sort_type_combo.currentIndex()
         sort_types = ["total", "https", "outratio"]
         sort_type = sort_types[index] if 0 <= index < len(sort_types) else "total"
-        base_cmd = [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
-            "--task", "flow-sort",
-            "--sort-type", sort_type
-        ]
+        base_cmd = self._core_command("flow-sort", "--sort-type", sort_type)
         if sort_type == "outratio":
             base_cmd += ["--ratio-threshold", str(self.flow_sort_tab.ratio_threshold_spin.value())]
         self.task_handler.execute_command(base_cmd, task_type="flow-sort", generate_graph=False)
@@ -908,24 +912,14 @@ class MainWindow(QMainWindow):
                                 tr("path_search_need_src_dst", "请输入源IP和目的IP"))
             return
         if self.path_tab.compare_checkbox.isChecked():
-            base_cmd = [
-                resource_path("backend/NetworkAnalyzerCore.exe"),
-                "--task", "compare-paths",
-                "--src", src,
-                "--dst", dst
-            ]
+            base_cmd = self._core_command("compare-paths", "--src", src, "--dst", dst)
             self.task_handler.execute_command(base_cmd, task_type="compare-paths", generate_graph=True,
                                               graph_name="compare_paths")
         else:
             index = self.path_tab.path_type_combo.currentIndex()
             path_types = ["min-congestion", "min-hop", "min-risk"]
             eng_type = path_types[index] if 0 <= index < len(path_types) else "min-congestion"
-            base_cmd = [
-                resource_path("backend/NetworkAnalyzerCore.exe"),
-                "--task", eng_type,
-                "--src", src,
-                "--dst", dst
-            ]
+            base_cmd = self._core_command(eng_type, "--src", src, "--dst", dst)
             self.task_handler.execute_command(base_cmd, task_type=eng_type, generate_graph=True, graph_name=eng_type)
 
     def run_port_scan(self):
@@ -933,23 +927,14 @@ class MainWindow(QMainWindow):
             return
         thr = self.anomaly_tab.port_scan_tab.threshold_spin.value()
         ratio = self.anomaly_tab.port_scan_tab.ratio_spin.value()
-        base_cmd = [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
-            "--task", "port-scan",
-            "--threshold", str(thr),
-            "--ratio-threshold", str(ratio)
-        ]
+        base_cmd = self._core_command("port-scan", "--threshold", str(thr), "--ratio-threshold", str(ratio))
         self.task_handler.execute_command(base_cmd, task_type="port-scan", generate_graph=True, graph_name="port_scan")
 
     def run_ddos_detection(self):
         if not self.is_data_valid():
             return
         thr = self.anomaly_tab.ddos_tab.neighbor_spin.value()
-        base_cmd = [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
-            "--task", "ddos-target",
-            "--threshold", str(thr)
-        ]
+        base_cmd = self._core_command("ddos-target", "--threshold", str(thr))
         traffic_str = self.anomaly_tab.ddos_tab.traffic_edit.text().strip()
         if traffic_str:
             try:
@@ -969,11 +954,7 @@ class MainWindow(QMainWindow):
         if not self.is_data_valid():
             return
         thr = self.anomaly_tab.star_tab.threshold_spin.value()
-        base_cmd = [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
-            "--task", "star-structures",
-            "--threshold", str(thr)
-        ]
+        base_cmd = self._core_command("star-structures", "--threshold", str(thr))
         self.task_handler.execute_command(base_cmd, task_type="star-structures", generate_graph=True, graph_name="star")
 
     def generate_subgraph(self):
@@ -985,11 +966,7 @@ class MainWindow(QMainWindow):
                                 tr("subgraph_need_target_ip", "请输入目标IP"))
             return
         self.log_text.append(tr("subgraph_generating", "正在生成以 {} 为中心的子图...").format(ip))
-        base_cmd = [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
-            "--task", "subgraph",
-            "--target", ip
-        ]
+        base_cmd = self._core_command("subgraph", "--target", ip)
         self.task_handler.execute_command(base_cmd, task_type="subgraph", generate_graph=True, graph_name="subgraph")
 
     def run_custom_rule(self):
@@ -1002,11 +979,7 @@ class MainWindow(QMainWindow):
                                 tr("custom_rule_need_target_ip", "请输入目标IP"))
             return
 
-        base_cmd = [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
-            "--task", "custom-rule",
-            "--rule-target", rule_target
-        ]
+        base_cmd = self._core_command("custom-rule", "--rule-target", rule_target)
 
         # 协议类型
         protocol_str = tab.protocol_edit.text().strip()

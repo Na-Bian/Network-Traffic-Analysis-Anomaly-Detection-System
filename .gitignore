@@ -2,6 +2,11 @@
 .idea/
 cmake-build*/
 
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
 # Visual Studio / MSVC
 *.obj
 *.pdb
