@@ -891,12 +891,34 @@ class MainWindow(QMainWindow):
             *args,
         ]
 
+    @staticmethod
+    def _combo_value(combo, values, default):
+        index = combo.currentIndex()
+        return values[index] if 0 <= index < len(values) else default
+
+    @staticmethod
+    def _scaled_bytes(value_text, unit_index):
+        multipliers = [1, 1024, 1024 ** 2, 1024 ** 3]
+        multiplier = multipliers[unit_index] if 0 <= unit_index < len(multipliers) else 1
+        return int(value_text) * multiplier
+
+    def _execute_task(self, task_type, *args, generate_graph=False, graph_name=None):
+        base_cmd = self._core_command(task_type, *args)
+        self.task_handler.execute_command(
+            base_cmd,
+            task_type=task_type,
+            generate_graph=generate_graph,
+            graph_name=graph_name,
+        )
+
     def run_flow_sort(self):
         if not self.is_data_valid():
             return
-        index = self.flow_sort_tab.sort_type_combo.currentIndex()
-        sort_types = ["total", "https", "outratio"]
-        sort_type = sort_types[index] if 0 <= index < len(sort_types) else "total"
+        sort_type = self._combo_value(
+            self.flow_sort_tab.sort_type_combo,
+            ["total", "https", "outratio"],
+            "total",
+        )
         base_cmd = self._core_command("flow-sort", "--sort-type", sort_type)
         if sort_type == "outratio":
             base_cmd += ["--ratio-threshold", str(self.flow_sort_tab.ratio_threshold_spin.value())]
@@ -916,19 +938,25 @@ class MainWindow(QMainWindow):
             self.task_handler.execute_command(base_cmd, task_type="compare-paths", generate_graph=True,
                                               graph_name="compare_paths")
         else:
-            index = self.path_tab.path_type_combo.currentIndex()
-            path_types = ["min-congestion", "min-hop", "min-risk"]
-            eng_type = path_types[index] if 0 <= index < len(path_types) else "min-congestion"
-            base_cmd = self._core_command(eng_type, "--src", src, "--dst", dst)
-            self.task_handler.execute_command(base_cmd, task_type=eng_type, generate_graph=True, graph_name=eng_type)
+            eng_type = self._combo_value(
+                self.path_tab.path_type_combo,
+                ["min-congestion", "min-hop", "min-risk"],
+                "min-congestion",
+            )
+            self._execute_task(eng_type, "--src", src, "--dst", dst, generate_graph=True, graph_name=eng_type)
 
     def run_port_scan(self):
         if not self.is_data_valid():
             return
         thr = self.anomaly_tab.port_scan_tab.threshold_spin.value()
         ratio = self.anomaly_tab.port_scan_tab.ratio_spin.value()
-        base_cmd = self._core_command("port-scan", "--threshold", str(thr), "--ratio-threshold", str(ratio))
-        self.task_handler.execute_command(base_cmd, task_type="port-scan", generate_graph=True, graph_name="port_scan")
+        self._execute_task(
+            "port-scan",
+            "--threshold", str(thr),
+            "--ratio-threshold", str(ratio),
+            generate_graph=True,
+            graph_name="port_scan",
+        )
 
     def run_ddos_detection(self):
         if not self.is_data_valid():
@@ -938,11 +966,7 @@ class MainWindow(QMainWindow):
         traffic_str = self.anomaly_tab.ddos_tab.traffic_edit.text().strip()
         if traffic_str:
             try:
-                val = int(traffic_str)
-                unit_index = self.anomaly_tab.ddos_tab.traffic_unit.currentIndex()
-                multipliers = [1, 1024, 1024 ** 2, 1024 ** 3]
-                multiplier = multipliers[unit_index] if 0 <= unit_index < len(multipliers) else 1
-                val *= multiplier
+                val = self._scaled_bytes(traffic_str, self.anomaly_tab.ddos_tab.traffic_unit.currentIndex())
                 base_cmd += ["--in-data-threshold", str(val)]
             except ValueError:
                 QMessageBox.warning(self, tr("ddos_warning_title", "警告"),
@@ -954,8 +978,7 @@ class MainWindow(QMainWindow):
         if not self.is_data_valid():
             return
         thr = self.anomaly_tab.star_tab.threshold_spin.value()
-        base_cmd = self._core_command("star-structures", "--threshold", str(thr))
-        self.task_handler.execute_command(base_cmd, task_type="star-structures", generate_graph=True, graph_name="star")
+        self._execute_task("star-structures", "--threshold", str(thr), generate_graph=True, graph_name="star")
 
     def generate_subgraph(self):
         if not self.is_data_valid():
@@ -966,8 +989,7 @@ class MainWindow(QMainWindow):
                                 tr("subgraph_need_target_ip", "请输入目标IP"))
             return
         self.log_text.append(tr("subgraph_generating", "正在生成以 {} 为中心的子图...").format(ip))
-        base_cmd = self._core_command("subgraph", "--target", ip)
-        self.task_handler.execute_command(base_cmd, task_type="subgraph", generate_graph=True, graph_name="subgraph")
+        self._execute_task("subgraph", "--target", ip, generate_graph=True, graph_name="subgraph")
 
     def run_custom_rule(self):
         if not self.is_data_valid():
@@ -997,9 +1019,7 @@ class MainWindow(QMainWindow):
                 return
 
         # 规则类型
-        rule_type_index = tab.rule_type_combo.currentIndex()
-        rule_type_values = ["deny", "allow"]
-        eng_rule_type = rule_type_values[rule_type_index] if 0 <= rule_type_index < len(rule_type_values) else "deny"
+        eng_rule_type = self._combo_value(tab.rule_type_combo, ["deny", "allow"], "deny")
         base_cmd += ["--rule-type", eng_rule_type]
 
         # IP范围
@@ -1045,11 +1065,7 @@ class MainWindow(QMainWindow):
         max_traffic_str = tab.max_traffic_edit.text().strip()
         if max_traffic_str:
             try:
-                val = int(max_traffic_str)
-                unit_index = tab.max_traffic_unit.currentIndex()
-                multipliers = [1, 1024, 1024 ** 2, 1024 ** 3]
-                multiplier = multipliers[unit_index] if 0 <= unit_index < len(multipliers) else 1
-                val *= multiplier
+                val = self._scaled_bytes(max_traffic_str, tab.max_traffic_unit.currentIndex())
                 base_cmd += ["--rule-max-traffic", str(val)]
             except ValueError:
                 QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
