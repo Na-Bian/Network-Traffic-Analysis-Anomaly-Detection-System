@@ -3,8 +3,7 @@ import argparse
 import json
 import math
 import os
-
-from pyvis.network import Network
+import sys
 
 from gui.translator import tr
 
@@ -18,15 +17,18 @@ def get_color_gradient(factor, start_hex="#E0F7FA", end_hex="#006064"):
 
 def generate_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white"):
     if not os.path.exists(json_path):
-        print(tr("subgraph_error_file_not_found", "错误：找不到文件 {}").format(json_path))
-        return
+        raise FileNotFoundError(tr("subgraph_error_file_not_found", "错误：找不到文件 {}").format(json_path))
+
+    try:
+        from pyvis.network import Network
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("缺少 pyvis 依赖，请在项目虚拟环境中安装 pyvis") from exc
 
     with open(json_path, 'r', encoding='utf-8') as f:
         try:
             data = json.load(f)
         except json.JSONDecodeError:
-            print(tr("subgraph_error_json_corrupted", "错误：JSON 格式损坏"))
-            return
+            raise ValueError(tr("subgraph_error_json_corrupted", "错误：JSON 格式损坏"))
 
     net = Network(height="900px", width="1600px", bgcolor=bgcolor, font_color=fontcolor, directed=True)
 
@@ -94,6 +96,8 @@ def generate_html(json_path, output_html_path, bgcolor="#222222", fontcolor="whi
         """)
 
     net.save_graph(output_html_path)
+    if not os.path.exists(output_html_path):
+        raise RuntimeError(tr("subgraph_error_file_not_found", "错误：找不到文件 {}").format(output_html_path))
 
 
 if __name__ == "__main__":
@@ -103,4 +107,8 @@ if __name__ == "__main__":
     parser.add_argument("--bgcolor", default="#222222", help="背景颜色，例如 #222222")
     parser.add_argument("--fontcolor", default="white", help="文字颜色，例如 white")
     args = parser.parse_args()
-    generate_html(args.json, args.output, args.bgcolor, args.fontcolor)
+    try:
+        generate_html(args.json, args.output, args.bgcolor, args.fontcolor)
+    except Exception as exc:
+        print(exc)
+        sys.exit(1)

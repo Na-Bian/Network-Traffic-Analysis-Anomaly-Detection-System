@@ -1,5 +1,6 @@
 # gui/html_helper.py
 import os
+import re
 
 from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QPalette
@@ -97,6 +98,10 @@ def replace_cdn_with_local(html_path, bg_color, text_color, log_callback=None):
         ]
         for cdn, local in replacements:
             content = content.replace(cdn, local)
+
+        content = re.sub(r'\s+integrity="[^"]*"', "", content)
+        content = re.sub(r'\s+crossorigin="[^"]*"', "", content)
+        content = re.sub(r'\s+referrerpolicy="[^"]*"', "", content)
 
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(content)

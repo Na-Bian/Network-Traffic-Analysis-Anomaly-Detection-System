@@ -4,15 +4,16 @@ import os
 import shutil
 import sys
 import tempfile
+from pathlib import Path
 
 
 def resource_path(relative_path):
     """获取资源文件的绝对路径"""
-    try:
-        base_path = sys._MEIPASS  # 打包后临时解压目录
-    except:
-        base_path = os.path.abspath(".")  # 开发环境根目录
-    return os.path.join(base_path, relative_path)
+    if hasattr(sys, "_MEIPASS"):
+        base_path = Path(sys._MEIPASS)  # 打包后临时解压目录
+    else:
+        base_path = Path(__file__).resolve().parents[1]  # 开发环境项目根目录
+    return str(base_path / relative_path)
 
 
 class TempDirManager:
