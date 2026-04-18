@@ -230,5 +230,9 @@
   "violation_protocol_not_allowed": "协议类型{}不在允许规则内",
   "violation_src_port_not_allowed": "源端口{}不在允许规则内",
   "violation_dst_port_not_allowed": "目的端口{}不在允许规则内",
-  "custom_rule_semantics_hint": "IP范围、协议和端口会作为组合条件匹配；拒绝规则命中即违规，允许规则未命中即违规。"
+  "custom_rule_semantics_hint": "IP范围、协议和端口会作为组合条件匹配；拒绝规则命中即违规，允许规则未命中即违规。",
+  "render_mode_interactive": "交互模式",
+  "render_mode_balanced": "均衡模式",
+  "render_mode_performance": "性能模式",
+  "render_mode_summary": "渲染器: {}，模式: {}，节点: {}，边: {}"
 }

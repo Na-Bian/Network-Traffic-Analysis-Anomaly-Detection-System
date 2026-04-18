@@ -661,7 +661,7 @@ class MainWindow(QMainWindow):
         self.full_graph_json_path = json_path
         self.full_graph_html_path = html_path
         cmd = [
-            resource_path("backend/NetworkAnalyzerCore.exe"),
+            core_executable_path(),
             "--input", self.data_file,
             "--task", "full-graph",
             "--output-json", json_path,
@@ -728,8 +728,25 @@ class MainWindow(QMainWindow):
                 self.log_text.append(tr("generate_html_load_failed", "加载 HTML 失败: {}").format(e))
 
         self.subgraph_worker.success.connect(on_render_success)
+        self.subgraph_worker.info.connect(self._handle_render_info)
         self.subgraph_worker.error.connect(lambda e: self.log_text.append(e))
         self.subgraph_worker.start()
+
+    def _handle_render_info(self, message):
+        if not message.startswith("render_mode:"):
+            self.log_text.append(message)
+            return
+        _, renderer, mode, nodes, edges = message.split(":", 4)
+        mode_label = {
+            "interactive": tr("render_mode_interactive", "交互模式"),
+            "balanced": tr("render_mode_balanced", "均衡模式"),
+            "performance": tr("render_mode_performance", "性能模式")
+        }.get(mode, mode)
+        self.log_text.append(
+            tr("render_mode_summary", "渲染器: {}，模式: {}，节点: {}，边: {}").format(
+                renderer, mode_label, nodes, edges
+            )
+        )
 
     def display_html(self, html_file):
         if not os.path.exists(html_file):

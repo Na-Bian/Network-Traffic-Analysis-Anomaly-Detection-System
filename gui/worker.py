@@ -6,7 +6,7 @@ import sys
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from backend.readPcap import save_to_csv
-from backend.subgraph import generate_html as generate_pyvis_html
+from backend.subgraph import generate_html as generate_graph_html
 
 
 # 连接C++后端
@@ -64,6 +64,7 @@ class AnalyzerWorker(QThread):
 class SubgraphWorker(QThread):
     success = pyqtSignal(str)  # 成功后传回 html_path
     error = pyqtSignal(str)
+    info = pyqtSignal(str)
 
     def __init__(self, json_path, html_path, bgcolor, fontcolor, parent=None):
         super().__init__(parent)
@@ -74,7 +75,11 @@ class SubgraphWorker(QThread):
 
     def run(self):
         try:
-            generate_pyvis_html(self.json_path, self.html_path, self.bgcolor, self.fontcolor)
+            render_info = generate_graph_html(self.json_path, self.html_path, self.bgcolor, self.fontcolor)
+            if render_info:
+                self.info.emit(
+                    "render_mode:{renderer}:{mode}:{nodes}:{edges}".format(**render_info)
+                )
             self.success.emit(self.html_path)
         except Exception as e:
             self.error.emit(f"生成子图失败: {str(e)}")

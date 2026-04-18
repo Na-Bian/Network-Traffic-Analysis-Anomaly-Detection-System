@@ -230,5 +230,9 @@
   "violation_protocol_not_allowed": "Protocol {} is not allowed",
   "violation_src_port_not_allowed": "Source port {} is not allowed",
   "violation_dst_port_not_allowed": "Destination port {} is not allowed",
-  "custom_rule_semantics_hint": "IP range, protocol, and ports are matched as combined conditions; deny rules flag matches, allow rules flag non-matches."
+  "custom_rule_semantics_hint": "IP range, protocol, and ports are matched as combined conditions; deny rules flag matches, allow rules flag non-matches.",
+  "render_mode_interactive": "Interactive mode",
+  "render_mode_balanced": "Balanced mode",
+  "render_mode_performance": "Performance mode",
+  "render_mode_summary": "Renderer: {}, mode: {}, nodes: {}, edges: {}"
 }

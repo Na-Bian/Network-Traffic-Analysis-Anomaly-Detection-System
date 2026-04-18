@@ -230,5 +230,9 @@
   "violation_protocol_not_allowed": "協定類型{}不在允許規則內",
   "violation_src_port_not_allowed": "來源連接埠{}不在允許規則內",
   "violation_dst_port_not_allowed": "目的連接埠{}不在允許規則內",
-  "custom_rule_semantics_hint": "IP範圍、協定和連接埠會作為組合條件匹配；拒絕規則命中即違規，允許規則未命中即違規。"
+  "custom_rule_semantics_hint": "IP範圍、協定和連接埠會作為組合條件匹配；拒絕規則命中即違規，允許規則未命中即違規。",
+  "render_mode_interactive": "互動模式",
+  "render_mode_balanced": "均衡模式",
+  "render_mode_performance": "效能模式",
+  "render_mode_summary": "渲染器: {}，模式: {}，節點: {}，邊: {}"
 }
