@@ -34,6 +34,13 @@ add_executable(NetworkAnalyzerCore
 
 target_link_libraries(NetworkAnalyzerCore PRIVATE network_analyzer_core)
 
+add_custom_command(TARGET NetworkAnalyzerCore POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:NetworkAnalyzerCore>
+        "${CMAKE_CURRENT_SOURCE_DIR}/../NetworkAnalyzerCore.exe"
+    COMMENT "Copying NetworkAnalyzerCore.exe to backend runtime directory"
+)
+
 add_executable(NetworkAnalyzerBenchmark
     benchmark.cpp
 )
