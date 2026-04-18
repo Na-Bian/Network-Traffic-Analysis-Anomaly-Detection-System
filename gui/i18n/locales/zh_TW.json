@@ -14,7 +14,6 @@
   "lang_zh_CN": "簡體中文",
   "lang_zh_TW": "繁體中文",
   "lang_en_US": "English",
-  "restart_required": "語言切換成功，部分介面（如已載入的資料標籤頁）可能需要重啟應用程式才能完全生效。",
   "info": "提示",
   "invalid_data": "資料無效",
   "data_not_loaded": "未加載任何數據文件，請先加載有效數據！",

@@ -243,52 +243,76 @@ class MainWindow(QMainWindow):
     def retranslate_ui(self):
         """语言切换时更新界面文本"""
         self.setWindowTitle(tr("app_title", "网络流量分析与异常检测系统"))
+        self.file_menu.setTitle(tr("file", "文件"))
+        self.open_action.setText(tr("open_file", "打开数据文件"))
+        self.export_menu.setTitle(tr("export_menu", "导出"))
+        self.export_pcap_csv_action.setText(tr("export_pcap_csv", "PCAP转换的CSV"))
+        self.full_graph_menu.setTitle(tr("task_full_graph", "全网拓扑"))
+        self.subgraph_menu.setTitle(tr("export_current_subgraph", "当前子图"))
         self.settings_menu.setTitle(tr("settings", "设置"))
         self.lang_menu.setTitle(tr("language", "语言 / Language"))
         self.action_zh_cn.setText(tr("lang_zh_CN", "简体中文"))
         self.action_zh_tw.setText(tr("lang_zh_TW", "繁体中文"))
         self.action_en.setText(tr("lang_en_US", "English"))
+        self.help_menu.setTitle(tr("help", "帮助"))
+        self.manual_action.setText(tr("help_manual", "用户手册"))
+        self.about_action.setText(tr("about", "关于"))
         self.thread_label.setText(tr("thread_count", "线程数:"))
+        self.data_file_label.setText(tr("data_file", "数据文件:"))
+        self.browse_btn.setText(tr("browse", "浏览..."))
+
+        self.flow_sort_tab.retranslate_ui()
+        self.path_tab.retranslate_ui()
+        self.anomaly_tab.retranslate_ui()
+        self.custom_rule_tab.retranslate_ui()
+        self.subgraph_tab.retranslate_ui()
+
+        self.tabs.setTabText(0, tr("traffic_sorting", "流量排序"))
+        self.tabs.setTabText(1, tr("path_search", "路径查找"))
+        self.tabs.setTabText(2, tr("anomaly_detection", "异常检测"))
+        self.tabs.setTabText(3, tr("anomaly_tab_custom_rule", "自定义规则"))
+        self.tabs.setTabText(4, tr("subgraph_visualization", "子图可视化"))
+
+        self.output_tabs.setTabText(0, tr("output_log_tab", "⚙️ 运行日志"))
+        self.output_tabs.setTabText(1, tr("output_table_tab", "📊 数据表格"))
+        self.output_tabs.setTabText(2, tr("output_detail_tab", "🗺️ 路径与详情"))
 
         if not self.is_data_available:
             self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
-
-        QMessageBox.information(self, tr("info", "提示"),
-                                tr("restart_required", "语言切换成功，部分界面可能需要重启生效。"))
 
     def init_ui(self):
         """初始化所有UI组件"""
         menubar = self.menuBar()
 
         # 文件菜单
-        file_menu = menubar.addMenu(tr("file", "文件"))
-        open_action = QAction(tr("open_file", "打开数据文件"), self)
-        open_action.triggered.connect(self.browse_file)
-        file_menu.addAction(open_action)
+        self.file_menu = menubar.addMenu(tr("file", "文件"))
+        self.open_action = QAction(tr("open_file", "打开数据文件"), self)
+        self.open_action.triggered.connect(self.browse_file)
+        self.file_menu.addAction(self.open_action)
 
-        file_menu.addSeparator()
+        self.file_menu.addSeparator()
 
-        export_menu = file_menu.addMenu(tr("export_menu", "导出"))
+        self.export_menu = self.file_menu.addMenu(tr("export_menu", "导出"))
 
         self.export_pcap_csv_action = QAction(tr("export_pcap_csv", "PCAP转换的CSV"), self)
         self.export_pcap_csv_action.triggered.connect(self.export_pcap_csv)
-        export_menu.addAction(self.export_pcap_csv_action)
+        self.export_menu.addAction(self.export_pcap_csv_action)
 
-        full_graph_menu = export_menu.addMenu(tr("task_full_graph", "全网拓扑"))
+        self.full_graph_menu = self.export_menu.addMenu(tr("task_full_graph", "全网拓扑"))
         self.export_full_graph_json_action = QAction("JSON", self)
         self.export_full_graph_json_action.triggered.connect(lambda: self.export_graph("full", "json"))
-        full_graph_menu.addAction(self.export_full_graph_json_action)
+        self.full_graph_menu.addAction(self.export_full_graph_json_action)
         self.export_full_graph_html_action = QAction("HTML", self)
         self.export_full_graph_html_action.triggered.connect(lambda: self.export_graph("full", "html"))
-        full_graph_menu.addAction(self.export_full_graph_html_action)
+        self.full_graph_menu.addAction(self.export_full_graph_html_action)
 
-        subgraph_menu = export_menu.addMenu(tr("export_current_subgraph", "当前子图"))
+        self.subgraph_menu = self.export_menu.addMenu(tr("export_current_subgraph", "当前子图"))
         self.export_subgraph_json_action = QAction("JSON", self)
         self.export_subgraph_json_action.triggered.connect(lambda: self.export_graph("current", "json"))
-        subgraph_menu.addAction(self.export_subgraph_json_action)
+        self.subgraph_menu.addAction(self.export_subgraph_json_action)
         self.export_subgraph_html_action = QAction("HTML", self)
         self.export_subgraph_html_action.triggered.connect(lambda: self.export_graph("current", "html"))
-        subgraph_menu.addAction(self.export_subgraph_html_action)
+        self.subgraph_menu.addAction(self.export_subgraph_html_action)
 
         # 初始时禁用所有导出动作，直到数据加载
         self.update_export_actions()
@@ -323,13 +347,13 @@ class MainWindow(QMainWindow):
         self.lang_menu.addAction(self.action_en)
 
         # 帮助菜单
-        help_menu = menubar.addMenu(tr("help", "帮助"))
-        manual_action = QAction(tr("help_manual", "用户手册"), self)
-        manual_action.triggered.connect(self.show_manual)
-        about_action = QAction(tr("about", "关于"), self)
-        about_action.triggered.connect(self.about)
-        help_menu.addAction(manual_action)
-        help_menu.addAction(about_action)
+        self.help_menu = menubar.addMenu(tr("help", "帮助"))
+        self.manual_action = QAction(tr("help_manual", "用户手册"), self)
+        self.manual_action.triggered.connect(self.show_manual)
+        self.about_action = QAction(tr("about", "关于"), self)
+        self.about_action.triggered.connect(self.about)
+        self.help_menu.addAction(self.manual_action)
+        self.help_menu.addAction(self.about_action)
 
         # 中央部件
         central = QWidget()
@@ -340,7 +364,8 @@ class MainWindow(QMainWindow):
 
         # 文件选择行
         file_layout = QHBoxLayout()
-        file_layout.addWidget(QLabel(tr("data_file", "数据文件:")))
+        self.data_file_label = QLabel(tr("data_file", "数据文件:"))
+        file_layout.addWidget(self.data_file_label)
         self.file_edit = QLineEdit()
         self.file_edit.setReadOnly(True)
         file_layout.addWidget(self.file_edit)
