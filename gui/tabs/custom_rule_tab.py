@@ -1,8 +1,8 @@
 # gui/tabs/custom_rule_tab.py
 from PyQt6.QtCore import Qt
 from PyQt6.QtCore import QSignalBlocker
-from PyQt6.QtWidgets import (QScrollArea, QWidget, QGridLayout, QLabel, QLineEdit,
-                             QGroupBox, QVBoxLayout, QHBoxLayout, QRadioButton, QComboBox, QPushButton, QSizePolicy)
+from PyQt6.QtWidgets import QScrollArea, QWidget, QGridLayout, QGroupBox, QVBoxLayout, QHBoxLayout, QSizePolicy
+from qfluentwidgets import BodyLabel, ComboBox, LineEdit, PrimaryPushButton, RadioButton
 
 from ..translator import tr
 
@@ -20,9 +20,9 @@ class CustomRuleTab(QScrollArea):
         layout.setSpacing(3)
 
         # 目标IP (行0)
-        self.target_ip_label = QLabel()
+        self.target_ip_label = BodyLabel()
         layout.addWidget(self.target_ip_label, 0, 0)
-        self.target_ip_edit = QLineEdit()
+        self.target_ip_edit = LineEdit()
         self.target_ip_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.target_ip_edit, 0, 1, 1, 2)
 
@@ -32,27 +32,27 @@ class CustomRuleTab(QScrollArea):
         range_layout.setContentsMargins(3, 3, 3, 3)
         range_layout.setSpacing(2)
 
-        self.radio_cidr = QRadioButton()
+        self.radio_cidr = RadioButton()
         self.radio_cidr.setChecked(True)
         self.radio_cidr.toggled.connect(self.on_range_toggled)
         range_layout.addWidget(self.radio_cidr)
 
-        self.cidr_edit = QLineEdit()
+        self.cidr_edit = LineEdit()
         range_layout.addWidget(self.cidr_edit)
 
-        self.radio_start_end = QRadioButton()
+        self.radio_start_end = RadioButton()
         range_layout.addWidget(self.radio_start_end)
 
         start_end_layout = QHBoxLayout()
         start_end_layout.setContentsMargins(0, 0, 0, 0)
         start_end_layout.setSpacing(2)
-        self.start_ip_edit = QLineEdit()
+        self.start_ip_edit = LineEdit()
         self.start_ip_edit.setEnabled(False)
         self.start_ip_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         start_end_layout.addWidget(self.start_ip_edit)
-        self.to_label = QLabel()
+        self.to_label = BodyLabel()
         start_end_layout.addWidget(self.to_label)
-        self.end_ip_edit = QLineEdit()
+        self.end_ip_edit = LineEdit()
         self.end_ip_edit.setEnabled(False)
         self.end_ip_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         start_end_layout.addWidget(self.end_ip_edit)
@@ -67,35 +67,35 @@ class CustomRuleTab(QScrollArea):
         optional_layout.setSpacing(2)
 
         # 协议类型
-        self.protocol_label = QLabel()
+        self.protocol_label = BodyLabel()
         optional_layout.addWidget(self.protocol_label, 0, 0)
-        self.protocol_edit = QLineEdit()
+        self.protocol_edit = LineEdit()
         self.protocol_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         optional_layout.addWidget(self.protocol_edit, 0, 1)
 
         # 源端口
-        self.src_port_label = QLabel()
+        self.src_port_label = BodyLabel()
         optional_layout.addWidget(self.src_port_label, 1, 0)
-        self.src_port_edit = QLineEdit()
+        self.src_port_edit = LineEdit()
         self.src_port_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         optional_layout.addWidget(self.src_port_edit, 1, 1)
 
         # 目的端口
-        self.dst_port_label = QLabel()
+        self.dst_port_label = BodyLabel()
         optional_layout.addWidget(self.dst_port_label, 2, 0)
-        self.dst_port_edit = QLineEdit()
+        self.dst_port_edit = LineEdit()
         self.dst_port_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         optional_layout.addWidget(self.dst_port_edit, 2, 1)
 
         # 最大流量阈值
-        self.max_traffic_label = QLabel()
+        self.max_traffic_label = BodyLabel()
         optional_layout.addWidget(self.max_traffic_label, 3, 0)
         max_traffic_hbox = QHBoxLayout()
-        self.max_traffic_edit = QLineEdit()
+        self.max_traffic_edit = LineEdit()
         self.max_traffic_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         max_traffic_hbox.addWidget(self.max_traffic_edit)
 
-        self.max_traffic_unit = QComboBox()
+        self.max_traffic_unit = ComboBox()
         self.max_traffic_unit.setCurrentIndex(1)
         max_traffic_hbox.addWidget(self.max_traffic_unit)
 
@@ -104,18 +104,18 @@ class CustomRuleTab(QScrollArea):
         layout.addWidget(self.optional_group, 2, 0, 1, 3)
 
         # 规则类型 (行3)
-        self.rule_type_label = QLabel()
+        self.rule_type_label = BodyLabel()
         layout.addWidget(self.rule_type_label, 3, 0)
-        self.rule_type_combo = QComboBox()
+        self.rule_type_combo = ComboBox()
         self.rule_type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.rule_type_combo, 3, 1, 1, 2)
 
-        self.rule_semantics_label = QLabel()
+        self.rule_semantics_label = BodyLabel()
         self.rule_semantics_label.setWordWrap(True)
         layout.addWidget(self.rule_semantics_label, 4, 0, 1, 3)
 
         # 检测按钮 (行5)
-        self.detect_btn = QPushButton()
+        self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.detect_btn, 5, 0, 1, 3)
 

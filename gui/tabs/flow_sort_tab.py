@@ -1,6 +1,7 @@
 # gui/tabs/flow_sort_tab.py
 from PyQt6.QtCore import QSignalBlocker
-from PyQt6.QtWidgets import QWidget, QGridLayout, QLabel, QComboBox, QDoubleSpinBox, QPushButton, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QGridLayout, QSizePolicy
+from qfluentwidgets import BodyLabel, ComboBox, DoubleSpinBox, PrimaryPushButton
 
 from ..translator import tr
 
@@ -12,15 +13,15 @@ class FlowSortTab(QWidget):
         layout.setContentsMargins(3, 3, 3, 3)
         layout.setSpacing(3)
 
-        self.sort_type_label = QLabel()
+        self.sort_type_label = BodyLabel()
         layout.addWidget(self.sort_type_label, 0, 0)
-        self.sort_type_combo = QComboBox()
+        self.sort_type_combo = ComboBox()
         self.sort_type_combo.currentTextChanged.connect(self.on_sort_type_changed)
         self.sort_type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.sort_type_combo, 0, 1)
 
-        self.ratio_label = QLabel()
-        self.ratio_threshold_spin = QDoubleSpinBox()
+        self.ratio_label = BodyLabel()
+        self.ratio_threshold_spin = DoubleSpinBox()
         self.ratio_threshold_spin.setRange(0.0, 1.0)
         self.ratio_threshold_spin.setValue(0.8)
         self.ratio_threshold_spin.setSingleStep(0.05)
@@ -30,7 +31,7 @@ class FlowSortTab(QWidget):
         layout.addWidget(self.ratio_label, 1, 0)
         layout.addWidget(self.ratio_threshold_spin, 1, 1)
 
-        self.flow_sort_btn = QPushButton()
+        self.flow_sort_btn = PrimaryPushButton()
         self.flow_sort_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.flow_sort_btn, 2, 0, 1, 2)
 

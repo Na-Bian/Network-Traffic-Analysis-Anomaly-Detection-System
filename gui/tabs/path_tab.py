@@ -1,6 +1,7 @@
 # gui/tabs/path_tab.py
 from PyQt6.QtCore import QSignalBlocker
-from PyQt6.QtWidgets import QWidget, QGridLayout, QLabel, QComboBox, QLineEdit, QCheckBox, QPushButton, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QGridLayout, QSizePolicy
+from qfluentwidgets import BodyLabel, CheckBox, ComboBox, LineEdit, PrimaryPushButton
 
 from ..translator import tr
 
@@ -12,30 +13,30 @@ class PathTab(QWidget):
         layout.setContentsMargins(3, 3, 3, 3)
         layout.setSpacing(3)
 
-        self.path_type_label = QLabel()
+        self.path_type_label = BodyLabel()
         layout.addWidget(self.path_type_label, 0, 0)
-        self.path_type_combo = QComboBox()
+        self.path_type_combo = ComboBox()
         self.path_type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.path_type_combo, 0, 1)
 
-        self.src_ip_label = QLabel()
+        self.src_ip_label = BodyLabel()
         layout.addWidget(self.src_ip_label, 1, 0)
-        self.path_src_edit = QLineEdit()
+        self.path_src_edit = LineEdit()
         self.path_src_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.path_src_edit, 1, 1)
 
-        self.dst_ip_label = QLabel()
+        self.dst_ip_label = BodyLabel()
         layout.addWidget(self.dst_ip_label, 2, 0)
-        self.path_dst_edit = QLineEdit()
+        self.path_dst_edit = LineEdit()
         self.path_dst_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.path_dst_edit, 2, 1)
 
-        self.compare_checkbox = QCheckBox()
+        self.compare_checkbox = CheckBox()
         self.compare_checkbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.compare_checkbox.toggled.connect(self.on_compare_toggled)
         layout.addWidget(self.compare_checkbox, 3, 0, 1, 2)
 
-        self.path_btn = QPushButton()
+        self.path_btn = PrimaryPushButton()
         self.path_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.path_btn, 4, 0, 1, 2)
 

@@ -20,6 +20,7 @@ from qfluentwidgets import (
     FluentWindow,
     HeaderCardWidget,
     LineEdit as FluentLineEdit,
+    MessageBox,
     NavigationItemPosition,
     Pivot,
     PrimaryPushButton,
@@ -29,9 +30,11 @@ from qfluentwidgets import (
     StrongBodyLabel,
     SubtitleLabel,
     TableWidget,
+    Theme,
     TitleLabel,
     isDarkTheme,
     qconfig,
+    setTheme,
 )
 
 from .html_helper import get_theme_colors, generate_placeholder_html, replace_cdn_with_local
@@ -333,6 +336,17 @@ class MainWindow(FluentWindow):
         self.lang_en_btn.setText(tr("lang_en_US", "English"))
         self.manual_btn.setText(tr("help_manual", "用户手册"))
         self.about_btn.setText(tr("about", "关于"))
+        self.theme_card.title_label.setText(tr("settings_theme_title", "外观主题"))
+        self.theme_card.subtitle_label.setText(tr("settings_theme_desc", "手动切换浅色、深色，或跟随系统设置。"))
+        self.language_card.title_label.setText(tr("language", "语言 / Language"))
+        self.language_card.subtitle_label.setText(tr("settings_language_desc", "语言切换会立即更新界面文本。"))
+        self.help_card.title_label.setText(tr("help", "帮助"))
+        self.help_card.subtitle_label.setText(tr("settings_help_desc", "查看用户手册或软件版本信息。"))
+        self.theme_label.setText(tr("settings_theme_label", "主题:"))
+        with QSignalBlocker(self.theme_combo):
+            self.theme_combo.setItemText(0, tr("settings_theme_auto", "跟随系统"))
+            self.theme_combo.setItemText(1, tr("settings_theme_light", "浅色"))
+            self.theme_combo.setItemText(2, tr("settings_theme_dark", "深色"))
         self._set_navigation_texts()
 
         if not self.is_data_available:
@@ -340,7 +354,9 @@ class MainWindow(FluentWindow):
 
     def init_ui(self):
         """初始化所有UI组件"""
-        self.setMicaEffectEnabled(True)
+        # Mica can render with incorrect transparent bands on some Windows/QtWebEngine setups.
+        # Use a stable Fluent surface instead of relying on OS composition.
+        self.setMicaEffectEnabled(False)
 
         # 文件与导出动作
         self.file_menu = QMenu(tr("file", "文件"), self)
@@ -742,7 +758,26 @@ class MainWindow(FluentWindow):
 
     def _build_settings_page(self):
         layout = self.settings_interface.page_layout
-        language_card = self._create_card(
+        self.theme_card = self._create_card(
+            tr("settings_theme_title", "外观主题"),
+            tr("settings_theme_desc", "手动切换浅色、深色，或跟随系统设置。")
+        )
+        theme_layout = QHBoxLayout()
+        theme_layout.setSpacing(10)
+        self.theme_label = BodyLabel(tr("settings_theme_label", "主题:"))
+        self.theme_combo = FluentComboBox()
+        self.theme_combo.addItem(tr("settings_theme_auto", "跟随系统"), "auto")
+        self.theme_combo.addItem(tr("settings_theme_light", "浅色"), "light")
+        self.theme_combo.addItem(tr("settings_theme_dark", "深色"), "dark")
+        self.theme_combo.setMinimumWidth(180)
+        self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        theme_layout.addWidget(self.theme_label)
+        theme_layout.addWidget(self.theme_combo)
+        theme_layout.addStretch()
+        self.theme_card.card_layout.addLayout(theme_layout)
+        layout.addWidget(self.theme_card)
+
+        self.language_card = self._create_card(
             tr("language", "语言 / Language"),
             tr("settings_language_desc", "语言切换会立即更新界面文本。")
         )
@@ -758,10 +793,10 @@ class MainWindow(FluentWindow):
         lang_layout.addWidget(self.lang_zh_tw_btn)
         lang_layout.addWidget(self.lang_en_btn)
         lang_layout.addStretch()
-        language_card.card_layout.addLayout(lang_layout)
-        layout.addWidget(language_card)
+        self.language_card.card_layout.addLayout(lang_layout)
+        layout.addWidget(self.language_card)
 
-        help_card = self._create_card(
+        self.help_card = self._create_card(
             tr("help", "帮助"),
             tr("settings_help_desc", "查看用户手册或软件版本信息。")
         )
@@ -773,9 +808,20 @@ class MainWindow(FluentWindow):
         help_layout.addWidget(self.manual_btn)
         help_layout.addWidget(self.about_btn)
         help_layout.addStretch()
-        help_card.card_layout.addLayout(help_layout)
-        layout.addWidget(help_card)
+        self.help_card.card_layout.addLayout(help_layout)
+        layout.addWidget(self.help_card)
         layout.addStretch()
+
+    def _on_theme_changed(self):
+        theme = ["auto", "light", "dark"][max(0, min(self.theme_combo.currentIndex(), 2))]
+        if theme == "dark":
+            setTheme(Theme.DARK, save=True)
+        elif theme == "light":
+            setTheme(Theme.LIGHT, save=True)
+        else:
+            setTheme(Theme.AUTO, save=True)
+        self.update_webview_theme()
+        self.update_log_detail_theme()
 
     def update_export_actions(self):
         # PCAP导出可用：仅当有原始pcap且转换后的csv存在
@@ -1019,8 +1065,9 @@ class MainWindow(FluentWindow):
 
     # ---------- HTML生成与显示 ----------
     def _render_options(self):
+        render_mode = ["auto", "vis", "sigma"][max(0, min(self.render_mode_combo.currentIndex(), 2))]
         return {
-            "render_mode": self.render_mode_combo.currentData() or "auto",
+            "render_mode": render_mode,
             "top_k_edges": self.top_k_edges_spin.value(),
             "aggregate_large_graph": self.aggregate_graph_checkbox.isChecked(),
         }
@@ -1171,6 +1218,25 @@ class MainWindow(FluentWindow):
             }}
             QMenu::item:selected {{
                 background-color: {hover_bg};
+            }}
+            QGroupBox {{
+                background-color: {surface_color};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 8px;
+                margin-top: 14px;
+                padding: 12px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+                color: {accent};
+                background-color: {surface_color};
+            }}
+            QScrollArea {{
+                background-color: transparent;
+                border: none;
             }}
         """)
 
@@ -1474,9 +1540,21 @@ class MainWindow(FluentWindow):
         return True
 
     def about(self):
-        QMessageBox.about(self, tr("about", "关于"),
-                          tr("about_content",
-                             "网络流量分析与异常检测系统\n华中科技大学网络空间安全学院 - 程序设计综合课程设计\n版本 1.0 | 2026年3月\n基于C++和PyQt6\n ©2026 那，边。版权所有。"))
+        box = MessageBox(
+            tr("about", "关于"),
+            tr(
+                "about_content",
+                "网络流量分析与异常检测系统\n"
+                "华中科技大学网络空间安全学院 - 程序设计综合课程设计\n"
+                "版本 1.0 | 2026年3月\n"
+                "基于 C++、PyQt6 和 PyQt-Fluent-Widgets\n"
+                "©2026 那，边。版权所有。"
+            ),
+            self
+        )
+        box.yesButton.setText(tr("ok", "确定"))
+        box.cancelButton.hide()
+        box.exec()
 
     def show_manual(self):
         """显示用户手册对话框（支持多语言和主题适配）"""

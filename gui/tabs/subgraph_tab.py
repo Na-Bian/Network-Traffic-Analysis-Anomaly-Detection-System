@@ -1,5 +1,6 @@
 # gui/tabs/subgraph_tab.py
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy
+from qfluentwidgets import BodyLabel, LineEdit, PrimaryPushButton
 
 from ..translator import tr
 
@@ -13,14 +14,14 @@ class SubgraphTab(QWidget):
 
         row1 = QHBoxLayout()
         row1.setSpacing(3)
-        self.target_ip_label = QLabel()
+        self.target_ip_label = BodyLabel()
         row1.addWidget(self.target_ip_label)
-        self.ip_edit = QLineEdit()
+        self.ip_edit = LineEdit()
         self.ip_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         row1.addWidget(self.ip_edit)
         layout.addLayout(row1)
 
-        self.generate_btn = QPushButton()
+        self.generate_btn = PrimaryPushButton()
         self.generate_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.generate_btn)
         self.retranslate_ui()

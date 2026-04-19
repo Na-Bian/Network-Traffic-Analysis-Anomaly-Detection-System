@@ -1,7 +1,7 @@
 # gui/tabs/anomaly_tabs.py
 from PyQt6.QtCore import QSignalBlocker
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
-                             QLineEdit, QComboBox, QPushButton, QTabWidget, QSizePolicy, QDoubleSpinBox)
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QSizePolicy
+from qfluentwidgets import BodyLabel, ComboBox, DoubleSpinBox, LineEdit, Pivot, PrimaryPushButton, SpinBox
 
 from ..translator import tr
 
@@ -14,18 +14,18 @@ class PortScanTab(QWidget):
         layout.setSpacing(8)
 
         threshold_row = QHBoxLayout()
-        self.threshold_label = QLabel()
+        self.threshold_label = BodyLabel()
         threshold_row.addWidget(self.threshold_label)
-        self.threshold_spin = QSpinBox()
+        self.threshold_spin = SpinBox()
         self.threshold_spin.setRange(1, 1000)
         self.threshold_spin.setValue(20)
         self.threshold_spin.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         threshold_row.addWidget(self.threshold_spin)
         layout.addLayout(threshold_row)
         ratio_row = QHBoxLayout()
-        self.ratio_label = QLabel()
+        self.ratio_label = BodyLabel()
         ratio_row.addWidget(self.ratio_label)
-        self.ratio_spin = QDoubleSpinBox()
+        self.ratio_spin = DoubleSpinBox()
         self.ratio_spin.setRange(0.0, 1.0)
         self.ratio_spin.setValue(0.8)
         self.ratio_spin.setSingleStep(0.05)
@@ -34,17 +34,17 @@ class PortScanTab(QWidget):
         layout.addLayout(ratio_row)
 
         traffic_row = QHBoxLayout()
-        self.min_traffic_label = QLabel()
+        self.min_traffic_label = BodyLabel()
         traffic_row.addWidget(self.min_traffic_label)
-        self.min_traffic_edit = QLineEdit()
+        self.min_traffic_edit = LineEdit()
         self.min_traffic_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         traffic_row.addWidget(self.min_traffic_edit)
-        self.min_traffic_unit = QComboBox()
+        self.min_traffic_unit = ComboBox()
         self.min_traffic_unit.setCurrentIndex(1)
         traffic_row.addWidget(self.min_traffic_unit)
         layout.addLayout(traffic_row)
 
-        self.detect_btn = QPushButton()
+        self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.detect_btn)
         self.retranslate_ui()
@@ -70,9 +70,9 @@ class DDosTab(QWidget):
         layout.setSpacing(8)
 
         neighbor_row = QHBoxLayout()
-        self.neighbor_label = QLabel()
+        self.neighbor_label = BodyLabel()
         neighbor_row.addWidget(self.neighbor_label)
-        self.neighbor_spin = QSpinBox()
+        self.neighbor_spin = SpinBox()
         self.neighbor_spin.setRange(1, 1000)
         self.neighbor_spin.setValue(20)
         self.neighbor_spin.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -80,21 +80,21 @@ class DDosTab(QWidget):
         layout.addLayout(neighbor_row)
 
         traffic_row = QHBoxLayout()
-        self.traffic_label = QLabel()
+        self.traffic_label = BodyLabel()
         traffic_row.addWidget(self.traffic_label)
-        self.traffic_edit = QLineEdit()
+        self.traffic_edit = LineEdit()
         self.traffic_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         traffic_row.addWidget(self.traffic_edit)
 
-        self.traffic_unit = QComboBox()
+        self.traffic_unit = ComboBox()
         self.traffic_unit.setCurrentIndex(2)
         traffic_row.addWidget(self.traffic_unit)
         layout.addLayout(traffic_row)
 
         ratio_row = QHBoxLayout()
-        self.in_ratio_label = QLabel()
+        self.in_ratio_label = BodyLabel()
         ratio_row.addWidget(self.in_ratio_label)
-        self.in_ratio_spin = QDoubleSpinBox()
+        self.in_ratio_spin = DoubleSpinBox()
         self.in_ratio_spin.setRange(0.0, 1.0)
         self.in_ratio_spin.setValue(0.8)
         self.in_ratio_spin.setSingleStep(0.05)
@@ -102,7 +102,7 @@ class DDosTab(QWidget):
         ratio_row.addWidget(self.in_ratio_spin)
         layout.addLayout(ratio_row)
 
-        self.detect_btn = QPushButton()
+        self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.detect_btn)
         self.retranslate_ui()
@@ -128,16 +128,16 @@ class StarTab(QWidget):
         layout.setSpacing(8)
 
         threshold_row = QHBoxLayout()
-        self.threshold_label = QLabel()
+        self.threshold_label = BodyLabel()
         threshold_row.addWidget(self.threshold_label)
-        self.threshold_spin = QSpinBox()
+        self.threshold_spin = SpinBox()
         self.threshold_spin.setRange(1, 1000)
         self.threshold_spin.setValue(20)
         self.threshold_spin.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         threshold_row.addWidget(self.threshold_spin)
         layout.addLayout(threshold_row)
 
-        self.detect_btn = QPushButton()
+        self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.detect_btn)
         self.retranslate_ui()
@@ -156,21 +156,32 @@ class AnomalyTab(QWidget):
         layout.setContentsMargins(3, 3, 3, 3)
         layout.setSpacing(3)
 
-        self.tab_widget = QTabWidget()
+        self.pivot = Pivot()
+        self.stack_widget = QStackedWidget()
         self.port_scan_tab = PortScanTab()
         self.ddos_tab = DDosTab()
         self.star_tab = StarTab()
 
-        self.tab_widget.addTab(self.port_scan_tab, tr("anomaly_tab_port_scan", "端口扫描"))
-        self.tab_widget.addTab(self.ddos_tab, tr("anomaly_tab_ddos", "DDoS目标"))
-        self.tab_widget.addTab(self.star_tab, tr("anomaly_tab_star", "星型结构"))
+        self.stack_widget.addWidget(self.port_scan_tab)
+        self.stack_widget.addWidget(self.ddos_tab)
+        self.stack_widget.addWidget(self.star_tab)
 
-        layout.addWidget(self.tab_widget)
+        self.pivot.addItem("port_scan", tr("anomaly_tab_port_scan", "端口扫描"),
+                           lambda: self.stack_widget.setCurrentWidget(self.port_scan_tab))
+        self.pivot.addItem("ddos", tr("anomaly_tab_ddos", "DDoS目标"),
+                           lambda: self.stack_widget.setCurrentWidget(self.ddos_tab))
+        self.pivot.addItem("star", tr("anomaly_tab_star", "星型结构"),
+                           lambda: self.stack_widget.setCurrentWidget(self.star_tab))
+        self.pivot.setCurrentItem("port_scan")
+        self.stack_widget.setCurrentWidget(self.port_scan_tab)
+
+        layout.addWidget(self.pivot)
+        layout.addWidget(self.stack_widget)
 
     def retranslate_ui(self):
         self.port_scan_tab.retranslate_ui()
         self.ddos_tab.retranslate_ui()
         self.star_tab.retranslate_ui()
-        self.tab_widget.setTabText(0, tr("anomaly_tab_port_scan", "端口扫描"))
-        self.tab_widget.setTabText(1, tr("anomaly_tab_ddos", "DDoS目标"))
-        self.tab_widget.setTabText(2, tr("anomaly_tab_star", "星型结构"))
+        self.pivot.setItemText("port_scan", tr("anomaly_tab_port_scan", "端口扫描"))
+        self.pivot.setItemText("ddos", tr("anomaly_tab_ddos", "DDoS目标"))
+        self.pivot.setItemText("star", tr("anomaly_tab_star", "星型结构"))
