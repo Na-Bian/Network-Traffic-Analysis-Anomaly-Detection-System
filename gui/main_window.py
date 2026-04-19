@@ -1037,19 +1037,19 @@ class MainWindow(FluentWindow):
         hero_card.setObjectName("dashboardHeroCard")
         hero_layout = QHBoxLayout(hero_card)
         hero_layout.setContentsMargins(28, 26, 28, 26)
-        hero_layout.setSpacing(24)
+        hero_layout.setSpacing(28)
 
         hero_text_layout = QVBoxLayout()
         hero_text_layout.setSpacing(10)
         hero_text_container = QWidget()
         hero_text_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        hero_text_container.setMaximumWidth(760)
+        hero_text_container.setMaximumWidth(780)
         hero_text_container.setLayout(hero_text_layout)
         self.dashboard_kicker_label = CaptionLabel(tr("dashboard_kicker", "Network Analyzer"))
         self.dashboard_kicker_label.setObjectName("dashboardKicker")
         self.dashboard_headline_label = TitleLabel(tr("dashboard_headline", "分析网络流量，监测异常行为"))
         self.dashboard_headline_label.setWordWrap(True)
-        self.dashboard_headline_label.setMaximumWidth(760)
+        self.dashboard_headline_label.setMaximumWidth(860)
         self.dashboard_body_label = BodyLabel(tr(
             "dashboard_body",
             "从 PCAP 或 CSV 数据开始，自动生成拓扑、运行检测任务，并把结果导出到统一的结果中心。"
@@ -1065,8 +1065,8 @@ class MainWindow(FluentWindow):
 
         command_card = CardWidget()
         command_card.setObjectName("dashboardActionPanel")
-        command_card.setMinimumWidth(420)
-        command_card.setMaximumWidth(520)
+        command_card.setMinimumWidth(460)
+        command_card.setMaximumWidth(560)
         command_card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         command_layout = QVBoxLayout(command_card)
         command_layout.setContentsMargins(22, 20, 22, 20)
@@ -1125,7 +1125,7 @@ class MainWindow(FluentWindow):
         status_layout.addWidget(self.dashboard_status_label)
         command_layout.addLayout(status_layout)
 
-        hero_layout.addWidget(command_card, 1)
+        hero_layout.addWidget(command_card, 0)
         layout.addWidget(hero_card)
 
         metric_layout = QHBoxLayout()
