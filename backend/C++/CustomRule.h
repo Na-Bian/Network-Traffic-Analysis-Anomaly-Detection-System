@@ -131,38 +131,33 @@ public:
                                              const uint16_t recordSrcPort, const uint16_t recordDstPort,
                                              const long long traffic) const {
         std::string reason; //用于存储违规原因的字符串
-        //RuleType为DENY
+        const bool inRange = other.getIP() >= IPRange.first.getIP() && other.getIP() <= IPRange.second.getIP();
+        const bool protocolMatch = protocol == 0 || recordProtocol == protocol;
+        const bool srcPortMatch = srcPort == 0 || recordSrcPort == srcPort;
+        const bool dstPortMatch = dstPort == 0 || recordDstPort == dstPort;
+        const bool ruleMatched = inRange && protocolMatch && srcPortMatch && dstPortMatch;
+
         if (type == RuleType::DENY) {
-            //检查记录中的IP地址是否在规则禁止的范围内
-            if (other.getIP() >= IPRange.first.getIP() && other.getIP() <= IPRange.second.getIP()) {
-                reason += "与" + other.toString() + "的通信违反IP地址范围规则;";
+            if (ruleMatched) {
+                reason += "通信匹配拒绝规则";
             }
         } else {
-            //RuleType为ALLOW，检查记录中的IP地址是否在规则允许的范围外
-            if (other.getIP() < IPRange.first.getIP() || other.getIP() > IPRange.second.getIP()) {
-                reason += "与" + other.toString() + "的通信违反IP地址范围规则;";
+            if (!inRange) {
+                reason += "对端IP" + other.toString() + "不在允许范围内;";
             }
-        }
-        //检查记录中的协议类型是否匹配规则定义的协议类型
-        if (protocol != 0 && recordProtocol == protocol) {
-            if (type == RuleType::DENY) {
-                reason += "协议类型" + std::to_string(protocol) + "违反规则;";
+            if (!protocolMatch) {
+                reason += "协议类型" + std::to_string(recordProtocol) + "不在允许规则内;";
             }
-        }
-        //检查记录中的源端口号是否匹配规则定义的端口号
-        if (srcPort != 0 && recordSrcPort == srcPort) {
-            if (type == RuleType::DENY) {
-                reason += "源端口" + std::to_string(srcPort) + "违反规则;";
+            if (!srcPortMatch) {
+                reason += "源端口" + std::to_string(recordSrcPort) + "不在允许规则内;";
             }
-        }
-        //检查记录中的目的端口号是否匹配规则定义的端口号
-        if (dstPort != 0 && recordDstPort == dstPort) {
-            if (type == RuleType::DENY) {
-                reason += "目的端口" + std::to_string(dstPort) + "违反规则;";
+            if (!dstPortMatch) {
+                reason += "目的端口" + std::to_string(recordDstPort) + "不在允许规则内;";
             }
         }
         //检查记录中的流量是否超过规则定义的最大流量阈值
-        if (traffic > maxTraffic) {
+        if (ruleMatched && traffic > maxTraffic) {
+            if (!reason.empty() && reason.back() != ';') reason += ";";
             reason += "与" + other.toString() + "的通信流量为" + std::to_string(traffic) +
                     " bytes，超过了最大流量阈值" + std::to_string(maxTraffic) + " bytes.";
         }
@@ -178,26 +173,45 @@ public:
 
     //函数ViolationRecords用于根据自定义规则检查图中的网络记录，并返回所有违反规则的记录列表
     std::set<ViolationRecord> ViolationRecords() {
-        if (const int targetIndex = graph.findVertexIndex(targetIP); targetIndex == -1) {
+        const int targetIndex = graph.findVertexIndex(targetIP);
+        if (targetIndex == -1) {
             throw std::runtime_error("找不到目标IP: " + targetIP.toString()); // 如果在图中找不到目标IP地址，抛出异常
         }
 
-        //分析图中节点targetIP的邻居信息，返回一个包含邻居索引和邻居信息的字典
-        std::unordered_map<int, NeighborInfo> neighbors = graph.analyzeNeighbors(targetIP);
-
         std::set<ViolationRecord> violations; //创建一个集合用于存储违反规则的记录
 
-        //遍历目标IP地址所有的邻居信息，检查每个邻居节点是否违反了自定义规则
-        for (const auto &[neighborIndex, info]: neighbors) {
-            const IPAddress &neighborIP = graph.getVertexIP(neighborIndex); //获取邻居节点的IP地址
-            //遍历目标IP地址与邻居节点之间的所有通信记录，检查每条记录是否违反了自定义规则
-            for (const auto &[recordProtocol, recordSrcPort, recordDstPort]: info.ports) {
-                if (std::string reason = checkViolation(
-                        neighborIP, recordProtocol, recordSrcPort, recordDstPort, info.InData + info.OutData);
-                    !reason.empty()) {
-                    //如果邻居节点违反了自定义规则，则将其添加到违规记录列表中
-                    violations.insert({targetIP, neighborIP, recordProtocol, recordSrcPort, recordDstPort, reason});
+        auto collectViolations = [this, &violations](const int srcIndex, const int dstIndex,
+                                                     const Edges::EdgeInfo &edgeInfo) {
+            const IPAddress srcIP = graph.getVertexIP(srcIndex);
+            const IPAddress dstIP = graph.getVertexIP(dstIndex);
+            const IPAddress otherIP = srcIP == targetIP ? dstIP : srcIP;
+
+            for (const auto &[recordProtocol, stats]: edgeInfo.protocolStats) {
+                for (const auto &[recordSrcPort, recordDstPort]: stats.ports) {
+                    const auto portTrafficIt = stats.portTraffic.find({recordSrcPort, recordDstPort});
+                    const long long recordTraffic = portTrafficIt == stats.portTraffic.end()
+                                                        ? stats.dataSize
+                                                        : portTrafficIt->second;
+                    if (std::string reason = checkViolation(
+                            otherIP, recordProtocol, recordSrcPort, recordDstPort, recordTraffic);
+                        !reason.empty()) {
+                        violations.insert({srcIP, dstIP, recordProtocol, recordSrcPort, recordDstPort, reason});
+                    }
                 }
+            }
+        };
+
+        const auto &targetEdges = graph.getEdges(targetIndex);
+        for (const int edgeIdx: targetEdges.getAllEdgeIndices()) {
+            const auto edgeInfo = targetEdges.getEdgeInfo(edgeIdx);
+            collectViolations(targetIndex, edgeInfo.dstIndex, edgeInfo);
+        }
+
+        for (int srcIndex = 0; srcIndex < graph.getVertexCount(); ++srcIndex) {
+            if (srcIndex == targetIndex) continue;
+            const auto &edges = graph.getEdges(srcIndex);
+            if (const int edgeIdx = edges.findEdgeIndex(targetIndex); edgeIdx != -1) {
+                collectViolations(srcIndex, targetIndex, edges.getEdgeInfo(edgeIdx));
             }
         }
         return violations; //返回违反规则的记录列表

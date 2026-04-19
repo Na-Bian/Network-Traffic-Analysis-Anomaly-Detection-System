@@ -1,21 +1,18 @@
 # gui/html_helper.py
 import os
+import re
 
 from PyQt6.QtCore import QUrl
-from PyQt6.QtGui import QPalette
-from PyQt6.QtWidgets import QApplication
+from qfluentwidgets import isDarkTheme
 
 from .utils import resource_path
 
 
 def get_theme_colors():
-    """获取当前系统主题的背景色和文字颜色"""
-    palette = QApplication.palette()
-    window_color = palette.color(QPalette.ColorRole.Window)
-    brightness = (window_color.red() * 299 + window_color.green() * 587 + window_color.blue() * 114) / 1000
-    is_dark = brightness < 128
-    bg_color = "#222222" if is_dark else "#ffffff"
-    text_color = "white" if is_dark else "black"
+    """Return colors from qfluentwidgets' active theme, not the stale Qt palette."""
+    is_dark = isDarkTheme()
+    bg_color = "#202020" if is_dark else "#f5f7fb"
+    text_color = "#f5f5f5" if is_dark else "#1f1f1f"
     return bg_color, text_color
 
 
@@ -86,6 +83,10 @@ def replace_cdn_with_local(html_path, bg_color, text_color, log_callback=None):
 
         # CDN替换映射
         replacements = [
+            ("https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js",
+             to_file_url(resource_path("resources/sigma/graphology.umd.min.js"))),
+            ("https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js",
+             to_file_url(resource_path("resources/sigma/sigma.min.js"))),
             ("https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css",
              to_file_url(resource_path("resources/vis/vis-network.min.css"))),
             ("https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js",
@@ -97,6 +98,10 @@ def replace_cdn_with_local(html_path, bg_color, text_color, log_callback=None):
         ]
         for cdn, local in replacements:
             content = content.replace(cdn, local)
+
+        content = re.sub(r'\s+integrity="[^"]*"', "", content)
+        content = re.sub(r'\s+crossorigin="[^"]*"', "", content)
+        content = re.sub(r'\s+referrerpolicy="[^"]*"', "", content)
 
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(content)

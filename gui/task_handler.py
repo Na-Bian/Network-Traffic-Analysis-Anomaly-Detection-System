@@ -2,7 +2,6 @@
 import re
 
 from PyQt6.QtCore import QObject, QTime
-from PyQt6.QtWidgets import QTableWidgetItem
 
 from .translator import tr, translate_backend_output, translate_violation_reason
 from .worker import AnalyzerWorker
@@ -41,13 +40,17 @@ class TaskHandler(QObject):
         self.main.result_detail.clear()
         self.task_output_buffer.clear()
 
-        self.main.output_tabs.setCurrentIndex(0)
+        self.main.show_output_route("log")
 
         self.worker = AnalyzerWorker(cmd)
         self.worker.output.connect(self.handle_worker_output)
         self.worker.error.connect(self.handle_worker_error)
+        worker = self.worker
 
         def success_handler():
+            collected_output = getattr(worker, "output_lines", None)
+            if collected_output is not None:
+                self.task_output_buffer = list(collected_output)
             self.main.log_text.append(
                 tr("task_complete", "\n[{}] ✅ 任务执行完成！正在解析结果...").format(
                     QTime.currentTime().toString()
@@ -111,9 +114,9 @@ class TaskHandler(QObject):
             self.parse_star_to_table()
 
         if self.main.result_table.rowCount() > 0:
-            self.main.output_tabs.setCurrentIndex(1)
+            self.main.show_output_route("table")
         elif len(self.main.result_detail.toPlainText()) > 0:
-            self.main.output_tabs.setCurrentIndex(2)
+            self.main.show_output_route("detail")
 
     def parse_custom_rule_to_table(self):
         """将自定义规则检测结果填入表格"""
@@ -125,8 +128,7 @@ class TaskHandler(QObject):
             tr("custom_rule_table_header_dst_port", "目的端口"),
             tr("custom_rule_table_header_reason", "违规原因")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [18, 18, 10, 10, 10, 34])
 
         pattern = r"^\s*([\d\.]+) -> ([\d\.]+) \[proto=(\d+), srcPort=(\d+), dstPort=(\d+)\] reason: (.+)$"
         row_idx = 0
@@ -136,12 +138,12 @@ class TaskHandler(QObject):
                 src_ip, dst_ip, protocol, src_port, dst_port, reason = match.groups()
                 localized_reason = translate_violation_reason(reason)
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(src_ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(dst_ip))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(protocol))
-                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(src_port))
-                self.main.result_table.setItem(row_idx, 4, QTableWidgetItem(dst_port))
-                self.main.result_table.setItem(row_idx, 5, QTableWidgetItem(localized_reason))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(src_ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(dst_ip))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(protocol))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(src_port))
+                self.main.result_table.setItem(row_idx, 4, self.main.centered_table_item(dst_port))
+                self.main.result_table.setItem(row_idx, 5, self.main.centered_table_item(localized_reason))
                 row_idx += 1
 
     def parse_flow_sort_to_table(self):
@@ -149,21 +151,22 @@ class TaskHandler(QObject):
         headers = None
         pattern = None
         for line in self.task_output_buffer:
-            if line.startswith("节点总流量排序"):  # 后端固定输出，不翻译
+            normalized = line.strip()
+            if "节点总流量排序" in normalized:  # 后端固定输出，不翻译
                 headers = [
                     tr("flow_sort_table_header_ip", "IP地址"),
                     tr("flow_sort_table_header_total_traffic", "总流量（字节）")
                 ]
                 pattern = r"^([\d\.]+),(\d+)$"
                 break
-            elif line.startswith("HTTPS节点流量排序"):  # 后端固定输出
+            elif "HTTPS节点流量排序" in normalized:  # 后端固定输出
                 headers = [
                     tr("flow_sort_table_header_ip", "IP地址"),
                     tr("flow_sort_table_header_https_traffic", "HTTPS流量（字节）")
                 ]
                 pattern = r"^([\d\.]+),(\d+)$"
                 break
-            elif line.startswith("出流量占比 >"):  # 后端固定输出
+            elif normalized.startswith("出流量占比 >") or normalized.startswith("出流量占比 >="):  # 后端固定输出
                 headers = [
                     tr("flow_sort_table_header_ip", "IP地址"),
                     tr("flow_sort_table_header_total_traffic", "总流量（字节）"),
@@ -174,59 +177,72 @@ class TaskHandler(QObject):
         if not headers:
             return
 
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [34, 22] if len(headers) == 2 else [24, 24, 18])
 
         row_idx = 0
         for line in self.task_output_buffer:
-            match = re.search(pattern, line)
+            match = re.search(pattern, line.strip())
             if match:
                 self.main.result_table.insertRow(row_idx)
                 for col, val in enumerate(match.groups()):
-                    self.main.result_table.setItem(row_idx, col, QTableWidgetItem(val))
+                    self.main.result_table.setItem(row_idx, col, self.main.centered_table_item(val))
                 row_idx += 1
+
+        if row_idx > 0:
+            self.main.show_output_route("table")
 
     def parse_port_scan_to_table(self):
         headers = [
             tr("port_scan_table_header_ip", "IP地址"),
-            tr("port_scan_table_header_port_count", "不同目的端口数"),
-            tr("flow_sort_table_header_out_ratio", "出流量占比")
+            tr("port_scan_table_header_port_count", "最大目的端口数"),
+            tr("port_scan_table_header_target_count", "最大目标数"),
+            tr("port_scan_table_header_scan_type", "扫描类型"),
+            tr("flow_sort_table_header_out_ratio", "出流量占比"),
+            tr("flow_sort_table_header_total_traffic", "总流量（字节）")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [20, 12, 12, 18, 14, 24])
 
         row_idx = 0
         for line in self.task_output_buffer:
-            # 匹配格式：IP,端口数,占比
-            match = re.match(r'^([\d\.]+),(\d+),([\d\.]+)$', line.strip())
+            # 匹配格式：IP,最大端口数,最大目标数,扫描类型,出流量占比,总流量
+            match = re.match(r'^([\d\.]+),(\d+),(\d+),([a-z]+),([\d\.]+),(\d+)$', line.strip())
             if match:
-                ip, port_count, ratio = match.groups()
+                ip, port_count, target_count, scan_type, ratio, total_traffic = match.groups()
+                scan_type = {
+                    "vertical": tr("port_scan_type_vertical", "纵向扫描"),
+                    "horizontal": tr("port_scan_type_horizontal", "横向扫描"),
+                    "mixed": tr("port_scan_type_mixed", "混合扫描")
+                }.get(scan_type, scan_type)
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(port_count))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(ratio))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(port_count))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(target_count))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(scan_type))
+                self.main.result_table.setItem(row_idx, 4, self.main.centered_table_item(ratio))
+                self.main.result_table.setItem(row_idx, 5, self.main.centered_table_item(total_traffic))
                 row_idx += 1
 
     def parse_ddos_to_table(self):
         """DDoS目标检测结果解析"""
         headers = [
             tr("ddos_table_header_ip", "IP地址"),
-            tr("ddos_table_header_neighbor_count", "邻居数"),
-            tr("ddos_table_header_in_data", "入流量（字节）")
+            tr("ddos_table_header_neighbor_count", "入方向源数"),
+            tr("ddos_table_header_in_data", "入流量（字节）"),
+            tr("ddos_table_header_in_ratio", "入流量占比")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [24, 18, 28, 18])
 
         row_idx = 0
         for line in self.task_output_buffer:
-            # 匹配格式：IP,邻居数,入流量
-            match = re.match(r'^([\d\.]+),(\d+),(\d+)$', line.strip())
+            # 匹配格式：IP,入方向源数,入流量,入流量占比
+            match = re.match(r'^([\d\.]+),(\d+),(\d+),([\d\.]+)$', line.strip())
             if match:
-                ip, neighbor_count, in_data = match.groups()
+                ip, neighbor_count, in_data, in_ratio = match.groups()
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(neighbor_count))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(in_data))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(neighbor_count))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(in_data))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(in_ratio))
                 row_idx += 1
 
     def parse_star_to_table(self):
@@ -234,22 +250,27 @@ class TaskHandler(QObject):
         headers = [
             tr("star_table_header_center_ip", "中心IP"),
             tr("star_table_header_neighbor_count", "邻居叶子数"),
-            tr("star_table_header_total_traffic", "总流量")
+            tr("star_table_header_total_traffic", "总流量"),
+            tr("ddos_table_header_in_data", "入流量（字节）"),
+            tr("star_table_header_out_data", "出流量（字节）"),
+            tr("star_table_header_leaf_ratio", "叶子占比")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [20, 14, 18, 18, 18, 12])
 
         # 正则中的“星型”等是后端固定输出，不翻译
-        pattern = r"星型 \d+: 中心=([\d\.]+), 邻居数=(\d+), 总流量=(\d+)"
+        pattern = r"星型 \d+: 中心=([\d\.]+), 邻居数=(\d+), 总流量=(\d+), 入流量=(\d+), 出流量=(\d+), 叶子占比=([\d\.]+)"
         row_idx = 0
         for line in self.task_output_buffer:
             match = re.search(pattern, line)
             if match:
-                center_ip, neighbor_count, total = match.groups()
+                center_ip, neighbor_count, total, in_data, out_data, leaf_ratio = match.groups()
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(center_ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(neighbor_count))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(total))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(center_ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(neighbor_count))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(total))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(in_data))
+                self.main.result_table.setItem(row_idx, 4, self.main.centered_table_item(out_data))
+                self.main.result_table.setItem(row_idx, 5, self.main.centered_table_item(leaf_ratio))
                 row_idx += 1
 
     def parse_path_to_detail(self):
@@ -258,7 +279,7 @@ class TaskHandler(QObject):
         # 确定度量值显示标签
         metric_label = {
             "min-congestion": tr("path_detail_congestion_label", "拥塞值: {}"),
-            "min-hop": tr("path_detail_hop_label", "跳数: {}"),
+            "min-hop": tr("path_detail_risk_label", "风险值: {}"),
             "min-risk": tr("path_detail_risk_label", "风险值: {}")
         }.get(task_type, tr("path_detail_congestion_label", "拥塞值: {}"))
 
@@ -307,7 +328,8 @@ class TaskHandler(QObject):
                 ips = re.findall(r'\d+\.\d+\.\d+\.\d+', ip_part)
                 if ips:
                     formatted = " → ".join(ips)
-                    metric_match = re.search(r'congestion=([\d.]+)', line)
+                    metric_pattern = r'risk=([\d.]+)' if task_type == "min-risk" else r'(?:congestion|risk)=([\d.]+)'
+                    metric_match = re.search(metric_pattern, line)
                     if metric_match:
                         metric_val = metric_match.group(1)
                         formatted += f" <span style='color:#7f8c8d;'>({metric_label.format(metric_val)})</span>"
@@ -331,9 +353,9 @@ class TaskHandler(QObject):
         colors = {"最小拥塞": "#e74c3c", "最小跳数": "#3498db", "最小风险": "#2ecc71"}
 
         stats = {
-            "最小拥塞": {"count": 0, "congestions": [], "metric": None},  # 增加 metric 字段
-            "最小跳数": {"count": 0, "congestions": [], "metric": None},
-            "最小风险": {"count": 0, "congestions": [], "metric": None}
+            "最小拥塞": {"count": 0, "values": [], "metric": None},
+            "最小跳数": {"count": 0, "values": [], "metric": None},
+            "最小风险": {"count": 0, "values": [], "metric": None}
         }
 
         current_section = None
@@ -366,10 +388,11 @@ class TaskHandler(QObject):
             if current_section and "|" in line and re.search(r'\d+\.\d+\.\d+\.\d+', line):
                 path_found = True
                 stats[current_section]["count"] += 1
-                congestion_match = re.search(r'congestion=([\d.]+)', line)
-                if congestion_match:
-                    val = float(congestion_match.group(1))
-                    stats[current_section]["congestions"].append(val)
+                metric_pattern = r'risk=([\d.]+)' if current_section == "最小风险" else r'(?:congestion|risk)=([\d.]+)'
+                metric_match = re.search(metric_pattern, line)
+                if metric_match:
+                    val = float(metric_match.group(1))
+                    stats[current_section]["values"].append(val)
                 path_lines.append((current_section, line))
 
         if not path_found:
@@ -384,14 +407,12 @@ class TaskHandler(QObject):
         html += "<th style='padding:8px; border:1px solid #ddd; text-align:center;'>" + \
                 tr("compare_paths_table_header_count", "路径数量") + "</th>"
         html += "<th style='padding:8px; border:1px solid #ddd; text-align:center;'>" + \
-                tr("compare_paths_table_header_congestion_range", "拥塞值范围(Min ~ Max)") + "</th></tr>"
-
-        congestion_label = tr("compare_paths_congestion_label", "拥塞值: {}")
+                tr("compare_paths_table_header_metric_range", "指标范围(Min ~ Max)") + "</th></tr>"
 
         for strategy, data in stats.items():
             color = colors[strategy]
             display_name = strategy_names[strategy]
-            vals = data["congestions"]
+            vals = data["values"]
             if not vals:
                 cong_display = "N/A"
             else:
@@ -428,9 +449,12 @@ class TaskHandler(QObject):
             ips = re.findall(r'\d+\.\d+\.\d+\.\d+', parts[0])
             if ips:
                 formatted = " → ".join(ips)
-                c_match = re.search(r'congestion=([\d.]+)', line)
-                if c_match:
-                    formatted += f" <span style='color:#7f8c8d;'>({tr('compare_paths_congestion_label', '拥塞值: {}').format(c_match.group(1))})</span>"
+                metric_pattern = r'risk=([\d.]+)' if strategy == "最小风险" else r'(?:congestion|risk)=([\d.]+)'
+                metric_match = re.search(metric_pattern, line)
+                if metric_match:
+                    label_key = "compare_paths_risk_label" if strategy in ("最小跳数", "最小风险") else "compare_paths_congestion_label"
+                    label_fallback = "风险值: {}" if strategy in ("最小跳数", "最小风险") else "拥塞值: {}"
+                    formatted += f" <span style='color:#7f8c8d;'>({tr(label_key, label_fallback).format(metric_match.group(1))})</span>"
                 html += f"<p style='margin-left:20px; font-family:monospace;'>{formatted}</p>"
 
         if current_section:

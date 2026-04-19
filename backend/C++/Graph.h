@@ -5,17 +5,21 @@
 # ifndef NetworkAnalyzer_GRAPH_H
 # define NetworkAnalyzer_GRAPH_H
 
-# include "vertices.h"
+# include "Vertices.h"
 
+# include <algorithm>
 # include <functional>
 # include <cmath>
 # include <thread>
+# include <string>
 
 //路径信息表示，包含路径上节点索引的列表和路径的拥塞水平
 struct PathInfo {
     std::vector<int> path; //路径上节点索引的列表
     double congestionLevel; //路径的拥塞水平
 };
+
+inline constexpr size_t DEFAULT_MAX_PATHS = 100;
 
 //邻居信息表示，包含与邻居节点通信使用过的所有源端口号和目的端口号的组合，以及对邻居而言的入流量和出流量
 struct NeighborInfo {
@@ -29,6 +33,41 @@ struct StarStructure {
     IPAddress centerNode; //中心节点的IP地址
     std::vector<std::pair<IPAddress, long long> > neighborNodes; //邻居节点的IP地址列表和与中心节点之间的流量
     long long totalData; //中心节点与邻居节点之间的总流量
+    long long inData; //中心节点总入流量
+    long long outData; //中心节点总出流量
+    double leafRatio; //叶子邻居占全部邻居的比例
+};
+
+struct PortScanner {
+    IPAddress ip;
+    int portCount;
+    int targetCount;
+    std::string scanType;
+    double outRatio;
+    long long totalTraffic;
+
+    bool operator<(const PortScanner &other) const {
+        if (ip != other.ip) return ip.getIP() < other.ip.getIP();
+        if (scanType != other.scanType) return scanType < other.scanType;
+        if (portCount != other.portCount) return portCount < other.portCount;
+        if (targetCount != other.targetCount) return targetCount < other.targetCount;
+        if (outRatio != other.outRatio) return outRatio < other.outRatio;
+        return totalTraffic < other.totalTraffic;
+    }
+};
+
+struct DDoSTarget {
+    IPAddress ip;
+    int sourceCount;
+    long long inData;
+    double inRatio;
+
+    bool operator<(const DDoSTarget &other) const {
+        if (ip != other.ip) return ip.getIP() < other.ip.getIP();
+        if (sourceCount != other.sourceCount) return sourceCount < other.sourceCount;
+        if (inData != other.inData) return inData < other.inData;
+        return inRatio < other.inRatio;
+    }
 };
 
 //连通分量信息表示，包含连通分量中节点的索引列表和边的信息列表
@@ -63,6 +102,11 @@ public:
     // 默认构造函数返回一个空图
     Graph() = default;
 
+    static unsigned int defaultThreadCount() {
+        const unsigned int count = std::thread::hardware_concurrency();
+        return count == 0 ? 1 : std::min(4u, count);
+    }
+
     // 基本查询接口
     [[nodiscard]] int getVertexCount() const { return verticesList.getVertexCount(); }
 
@@ -96,32 +140,37 @@ public:
     void addRecord(const IPAddress &srcIP, const IPAddress &dstIP, uint8_t protocol, uint16_t srcPort, uint16_t dstPort,
                    int dataSize, double duration);
 
+    void mergeFrom(const Graph &other);
+
     // 端口扫描攻击者检测
     // 端口扫描攻击者通常会对同一个IP的大量不同端口发送探测包，寻找开放的服务
-    [[nodiscard]] std::set<std::tuple<IPAddress, int, double> > detectPortScanners(int portThreshold = 20,
-        double outRatioThreshold = 0.8) const;
+    [[nodiscard]] std::set<PortScanner> detectPortScanners(int portThreshold = 20,
+        double outRatioThreshold = 0.8, long long minTraffic = 0) const;
 
     //DDoS攻击目标检测
     //DDoS攻击目标通常在短时间内的入流量极大，且同时与海量不同的IP通信
-    [[nodiscard]] std::set<std::tuple<IPAddress, int, long long> > detectDDoSTargets(int neighborThreshold = 20,
-        long long inDataThreshold = 1LL << 30) const;
+    [[nodiscard]] std::set<DDoSTarget> detectDDoSTargets(int sourceThreshold = 20,
+        long long inDataThreshold = 1LL << 30, double inRatioThreshold = 0.8) const;
 
     //函数minCongestion用于寻找图中从a节点到b节点的最小拥塞路径
     //参数：起始节点a的IP地址、目标节点b的IP地址
     //返回值：所有最小拥塞路径的列表，每条路径表示为一个包含路径上节点索引的列表和路径的拥塞水平
-    [[nodiscard]] std::vector<PathInfo> minCongestion(const IPAddress &ipa, const IPAddress &ipb) const;
+    [[nodiscard]] std::vector<PathInfo> minCongestion(const IPAddress &ipa, const IPAddress &ipb,
+                                                      size_t maxPaths = DEFAULT_MAX_PATHS) const;
 
     //函数minHop用于寻找图中从a节点到b节点的最小跳数路径
     //参数：图对象、起始节点a的IP地址、目标节点b的IP地址
     //返回值：所有最小跳数路径信息的列表，每条路径信息包含路径上节点索引的列表和路径的拥塞水平
-    [[nodiscard]] std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb) const;
+    [[nodiscard]] std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb,
+                                               size_t maxPaths = DEFAULT_MAX_PATHS) const;
 
     //重载函数minHop，增加参数minHopCount用于返回最小跳数路径的跳数
-    std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb, int &minHopCount) const;
+    std::vector<PathInfo> minHop(const IPAddress &ipa, const IPAddress &ipb, int &minHopCount,
+                                 size_t maxPaths = DEFAULT_MAX_PATHS) const;
 
     //函数minCostCustom用于寻找图中从a节点到b节点的最小代价路径，代价由匿名函数costFunc(Edge)自定义，默认基于边的安全性
     std::vector<PathInfo> minCostCustom(
-        const IPAddress &ipa, const IPAddress &ipb, double &minCostLevel,
+        const IPAddress &ipa, const IPAddress &ipb, double &minCostLevel, size_t maxPaths = DEFAULT_MAX_PATHS,
         const std::function<double(const Edges::EdgeInfo &)> &costFunc = [](const Edges::EdgeInfo &edge) {
             const double base = Edges::isSecure(edge) ? 1.0 : 10.0; // 安全边的代价为1，不安全边的代价为10
 
@@ -138,7 +187,7 @@ public:
     //计算图中所有节点的邻居信息
     //返回值：一个包含邻居索引和邻居信息的字典列表
     [[nodiscard]] std::vector<std::unordered_map<int, NeighborInfo> > analyzeNeighbors(
-        unsigned int numThreads = std::thread::hardware_concurrency() >= 4 ? 4 : std::thread::hardware_concurrency())
+        unsigned int numThreads = defaultThreadCount())
     const;
 
     //重载函数analyzeNeighbors，查找单个节点的邻居信息

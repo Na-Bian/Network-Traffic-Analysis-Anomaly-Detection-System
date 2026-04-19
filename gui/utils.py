@@ -4,15 +4,35 @@ import os
 import shutil
 import sys
 import tempfile
+from pathlib import Path
 
 
 def resource_path(relative_path):
     """获取资源文件的绝对路径"""
-    try:
-        base_path = sys._MEIPASS  # 打包后临时解压目录
-    except:
-        base_path = os.path.abspath(".")  # 开发环境根目录
-    return os.path.join(base_path, relative_path)
+    if hasattr(sys, "_MEIPASS"):
+        base_path = Path(sys._MEIPASS)  # 打包后临时解压目录
+    else:
+        base_path = Path(__file__).resolve().parents[1]  # 开发环境项目根目录
+    return str(base_path / relative_path)
+
+
+def core_executable_path():
+    """开发环境优先使用最近一次 CMake 构建的后端程序，打包环境使用随包资源。"""
+    packaged_path = Path(resource_path("backend/NetworkAnalyzerCore.exe"))
+    if hasattr(sys, "_MEIPASS"):
+        return str(packaged_path)
+
+    project_root = Path(__file__).resolve().parents[1]
+    candidates = [
+        packaged_path,
+        project_root / "backend" / "C++" / "cmake-build-debug-visual-studio" / "NetworkAnalyzerCore.exe",
+        project_root / "backend" / "C++" / "cmake-build-release-visual-studio" / "NetworkAnalyzerCore.exe",
+        project_root / "backend" / "C++" / "cmake-build-debug" / "NetworkAnalyzerCore.exe",
+    ]
+    existing = [path for path in candidates if path.exists()]
+    if not existing:
+        return str(packaged_path)
+    return str(max(existing, key=lambda path: path.stat().st_mtime))
 
 
 class TempDirManager:

@@ -1,6 +1,11 @@
 ﻿// main.cpp
 
-# include <windows.h>
+# ifdef _WIN32
+#  ifndef NOMINMAX
+#   define NOMINMAX
+#  endif
+#  include <windows.h>
+# endif
 # include "Graph.h"
 # include "CSVReader.h"
 # include "CustomRule.h"
@@ -37,7 +42,10 @@ void printUsage(const char *progName) {
             << "  --dst <ip>                        目的IP（用于路径）\n"
             << "  --threshold <num>                 阈值（端口扫描、DDoS、星型结构）\n"
             << "  --in-data-threshold <num>         入流量阈值（DDoS）\n"
+            << "  --in-ratio-threshold <num>        入流量占比阈值（DDoS，0-1）\n"
+            << "  --min-traffic <num>               最小总流量阈值（端口扫描）\n"
             << "  --threads <num>                   线程数（默认CPU核心数）\n"
+            << "  --max-paths <num>                 最多输出的等价路径数量（默认100）\n"
             << "  --rule-target <ip>                自定义规则：目标IP\n"
             << "  --range-cidr <cidr>               自定义规则：CIDR范围\n"
             << "  --range-start <ip>                自定义规则：起始IP（与--range-end配合）\n"
@@ -60,14 +68,15 @@ int main(int argc, char *argv[]) {
         string inputFile, task, targetIP, srcIP, dstIP, outputJsonFile;
         string ruleTarget, rangeCIDR, rangeStart, rangeEnd, ruleTypeStr;
         string sortType = "total"; // 默认使用总流量排序
-        double ratioThreshold = 0.8, inDataThreshold = 1LL << 30; // 默认出流量占比阈值和DDoS入流量阈值
+        double ratioThreshold = 0.8, inRatioThreshold = 0.8; // 默认出/入流量占比阈值
         uint8_t ruleProtocol = 0;
         uint16_t ruleSrcPort = 0, ruleDstPort = 0;
         long long maxTraffic = (numeric_limits<long long>::max)();
+        long long inDataThreshold = 1LL << 30, minTraffic = 0; // 默认DDoS入流量阈值和端口扫描最小样本
         bool hasCIDR = false, hasStartEnd = false;
         int threshold = 0;
-        const int cpuCount = static_cast<int>(thread::hardware_concurrency());
-        int threads = cpuCount >= 4 ? 4 : cpuCount; //默认线程数为4
+        int threads = static_cast<int>(Graph::defaultThreadCount()); //默认线程数为4
+        size_t maxPaths = DEFAULT_MAX_PATHS;
 
         // 解析参数
         for (int i = 1; i < argc; ++i) {
@@ -87,6 +96,9 @@ int main(int argc, char *argv[]) {
             } else if (arg == "--threads" && i + 1 < argc) {
                 threads = stoi(argv[++i]);
                 if (threads < 1) threads = 1;
+            } else if (arg == "--max-paths" && i + 1 < argc) {
+                maxPaths = stoull(argv[++i]);
+                if (maxPaths < 1) maxPaths = 1;
             } else if (arg == "--output-json" && i + 1 < argc) {
                 outputJsonFile = argv[++i];
             } else if (arg == "--sort-type" && i + 1 < argc) {
@@ -95,6 +107,10 @@ int main(int argc, char *argv[]) {
                 ratioThreshold = stod(argv[++i]);
             } else if (arg == "--in-data-threshold" && i + 1 < argc) {
                 inDataThreshold = stoll(argv[++i]);
+            } else if (arg == "--in-ratio-threshold" && i + 1 < argc) {
+                inRatioThreshold = stod(argv[++i]);
+            } else if (arg == "--min-traffic" && i + 1 < argc) {
+                minTraffic = stoll(argv[++i]);
             } else if (arg == "--help") {
                 printUsage(argv[0]);
                 return 0;
@@ -181,7 +197,7 @@ int main(int argc, char *argv[]) {
                 cerr << "错误: min-congestion 需要 --src 和 --dst\n";
                 return 1;
             }
-            auto paths = graph.minCongestion(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()));
+            auto paths = graph.minCongestion(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), maxPaths);
             cout << "最小拥塞路径 (共 " << paths.size() << " 条):\n";
             if (paths.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -202,7 +218,7 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
             int minHopCount;
-            auto paths = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount);
+            auto paths = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount, maxPaths);
             cout << "最小跳数路径 (最小跳数 = " << minHopCount << "):\n";
             if (paths.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -223,15 +239,16 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
             double minRiskLevel;
-            auto paths = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel);
+            auto paths = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel,
+                                             maxPaths);
             cout << "最小风险路径 (最小风险值 = " << minRiskLevel << "):\n";
             if (paths.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
             } else {
-                for (const auto &[path, congestion]: paths) {
+                for (const auto &[path, risk]: paths) {
                     for (int idx: path)
                         cout << graph.getVertexIP(idx).toString() << " ";
-                    cout << "| congestion=" << congestion << "\n";
+                    cout << "| risk=" << risk << "\n";
                 }
             }
             if (!outputJsonFile.empty()) {
@@ -248,7 +265,7 @@ int main(int argc, char *argv[]) {
 
             // 分别获取三种路径
             // 最小拥塞路径
-            auto pathsCong = graph.minCongestion(src, dst);
+            auto pathsCong = graph.minCongestion(src, dst, maxPaths);
             cout << "最小拥塞路径 (共 " << pathsCong.size() << " 条):\n";
             if (pathsCong.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -262,7 +279,7 @@ int main(int argc, char *argv[]) {
 
             // 最小跳数路径
             int minHopCount;
-            auto pathsHop = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount);
+            auto pathsHop = graph.minHop(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minHopCount, maxPaths);
             cout << "最小跳数路径 (最小跳数 = " << minHopCount << "):\n";
             if (pathsHop.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
@@ -276,15 +293,16 @@ int main(int argc, char *argv[]) {
 
             // 最小风险路径
             double minRiskLevel;
-            auto pathsRisk = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel);
+            auto pathsRisk = graph.minCostCustom(IPAddress(srcIP.c_str()), IPAddress(dstIP.c_str()), minRiskLevel,
+                                                 maxPaths);
             cout << "最小风险路径 (最小风险值 = " << minRiskLevel << "):\n";
             if (pathsRisk.empty()) {
                 cout << "没有找到从 " << srcIP << " 到 " << dstIP << " 的路径\n";
             } else {
-                for (const auto &[path, congestion]: pathsRisk) {
+                for (const auto &[path, risk]: pathsRisk) {
                     for (int idx: path)
                         cout << graph.getVertexIP(idx).toString() << " ";
-                    cout << "| congestion=" << congestion << "\n";
+                    cout << "| risk=" << risk << "\n";
                 }
             }
 
@@ -296,10 +314,15 @@ int main(int argc, char *argv[]) {
             }
         } else if (task == "port-scan") {
             int thr = threshold > 0 ? threshold : 20;
-            auto scanners = graph.detectPortScanners(thr, ratioThreshold);
+            auto scanners = graph.detectPortScanners(thr, ratioThreshold, minTraffic);
             cout << "检测到端口扫描攻击者 (" << scanners.size() << " 个):\n";
-            for (const auto &[ip, portCount, outRatio]: scanners) {
-                cout << ip.toString() << "," << portCount << "," << outRatio << "\n";
+            for (const auto &scanner: scanners) {
+                cout << scanner.ip.toString() << ","
+                        << scanner.portCount << ","
+                        << scanner.targetCount << ","
+                        << scanner.scanType << ","
+                        << scanner.outRatio << ","
+                        << scanner.totalTraffic << "\n";
             }
             if (!outputJsonFile.empty()) {
                 SubgraphExporter(graph).exportPortScannersAsSubgraph(scanners, outputJsonFile);
@@ -307,10 +330,13 @@ int main(int argc, char *argv[]) {
             }
         } else if (task == "ddos-target") {
             int thr = threshold > 0 ? threshold : 20;
-            auto targets = graph.detectDDoSTargets(thr, inDataThreshold);
+            auto targets = graph.detectDDoSTargets(thr, inDataThreshold, inRatioThreshold);
             cout << "检测到DDoS攻击目标 (" << targets.size() << " 个):\n";
-            for (const auto &[ip, neighborCount, inData]: targets) {
-                cout << ip.toString() << "," << neighborCount << "," << inData << "\n";
+            for (const auto &target: targets) {
+                cout << target.ip.toString() << ","
+                        << target.sourceCount << ","
+                        << target.inData << ","
+                        << target.inRatio << "\n";
             }
             if (!outputJsonFile.empty()) {
                 SubgraphExporter(graph).exportDDoSTargetsAsSubgraph(targets, outputJsonFile);
@@ -321,10 +347,13 @@ int main(int argc, char *argv[]) {
             auto stars = graph.findStarStructures(thr);
             cout << "找到星型结构 (" << stars.size() << " 个):\n";
             for (size_t i = 0; i < stars.size(); ++i) {
-                const auto &[center, neighbors, totalData] = stars[i];
+                const auto &[center, neighbors, totalData, inData, outData, leafRatio] = stars[i];
                 cout << "星型 " << i + 1 << ": 中心=" << center.toString()
                         << ", 邻居数=" << neighbors.size()
-                        << ", 总流量=" << totalData << "\n";
+                        << ", 总流量=" << totalData
+                        << ", 入流量=" << inData
+                        << ", 出流量=" << outData
+                        << ", 叶子占比=" << leafRatio << "\n";
                 cout << "  邻居 (IP, 流量): ";
                 for (const auto &[ip, traffic]: neighbors) {
                     cout << ip.toString() << "(" << traffic << ") ";
@@ -338,7 +367,7 @@ int main(int argc, char *argv[]) {
         } else if (task == "custom-rule") {
             // 验证必要参数
             if (ruleTarget.empty()) {
-                cerr << "错误: custom-rule 需要 --rule-src\n";
+                cerr << "错误: custom-rule 需要 --rule-target\n";
                 return 1;
             }
             if (!hasCIDR && !(hasStartEnd && !rangeStart.empty() && !rangeEnd.empty())) {

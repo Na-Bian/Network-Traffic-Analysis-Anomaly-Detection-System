@@ -226,11 +226,22 @@
     <div class="container">
         <h1>Network Traffic Analysis & Anomaly Detection System</h1>
         <p class="subtitle">School of Cyber Science and Engineering, Huazhong University of Science and Technology - Comprehensive Programming Course Design</p>
-        <div class="version">Version 1.0 | March 2026</div>
+        <div class="version">Version 2.0 | April 2026</div>
 
         <h2>📖 1. System Overview</h2>
         <p>This system is a practical outcome of the "Comprehensive Programming Course Design" at the School of Cyber Science and Engineering, Huazhong University of Science and Technology. It integrates theoretical knowledge of computer networks, data structures, algorithm design, and C++/Python programming into a real‑world network security analysis scenario. Facing increasingly complex cyber attacks, real‑time monitoring and intelligent analysis of massive traffic have become critical to maintaining stable network operation. This system closely meets actual needs, efficiently processes real network session data, automatically builds network topology models, and integrates a series of functions such as traffic statistics, behavior analysis, anomaly detection, and result visualization, providing network administrators and security analysts with an intuitive and efficient all‑in‑one analysis tool.
         </p>
+
+        <div class="tip">
+            <strong>🆕 What's New in 2.0</strong>
+            <ul style="margin-top: 8px;">
+                <li><strong>Redesigned interface</strong>: Rebuilt as a Win11 Fluent multi-page app with light/dark themes, adaptive title bar behavior, side navigation, and clearer result routing.</li>
+                <li><strong>Visualization optimization</strong>: Added a Sigma/WebGL renderer and performance mode so large network topologies automatically use a more suitable rendering path.</li>
+                <li><strong>Stronger anomaly detection</strong>: Port scan, DDoS target, and custom rule checks now include richer thresholds and directional checks, with more complete result tables and subgraphs.</li>
+                <li><strong>Path analysis optimization</strong>: Added minimum-risk paths, three-strategy comparison, and maximum path output limits to prevent too many equivalent paths from affecting performance.</li>
+                <li><strong>Data loading and runtime stability</strong>: CSV parsing now validates fields, backend runtime files are synchronized, and worker threads are adaptively capped to reduce high-thread scheduling overhead.</li>
+            </ul>
+        </div>
 
         <div class="tip">
             <strong>✨ Core Capabilities at a Glance</strong>
@@ -286,8 +297,8 @@
             <tbody>
                 <tr><td>Operating System</td><td>Windows 10 64‑bit (version 1903 or later)</td><td>Windows 11 64‑bit (version 24H2 or later)</td></tr>
                 <tr><td>CPU</td><td>Intel Core i3 or equivalent</td><td>Intel Core i5 or equivalent</td></tr>
-                <tr><td>Memory</td><td>4 GB RAM</td><td>6 GB RAM or more</td></tr>
-                <tr><td>Disk</td><td>200 MB free space</td><td>SSD, 500 MB or more free space</td></tr>
+                <tr><td>Memory</td><td>4 GB RAM</td><td>8 GB RAM or more</td></tr>
+                <tr><td>Disk</td><td>500 MB free space</td><td>SSD, 1 GB or more free space</td></tr>
             </tbody>
         </table>
         <div class="tip">
@@ -397,7 +408,7 @@
 
         <h2>⚙️ 7. Settings & Personalization</h2>
         <h3>7.1 Thread Count</h3>
-        <p>The menu <code>Settings → Thread Count</code> lets you adjust the number of CPU cores used for background analysis. Default is <code>4</code>.</p>
+        <p>The menu <code>Settings → Thread Count</code> lets you adjust the number of CPU cores used for background analysis. Default is <code>4</code>. To avoid excessive scheduling and merge overhead, the backend adaptively caps the actual worker count based on data size and the default parallelism.</p>
         <h3>7.2 Language Switching</h3>
         <p>Click <code>Settings → Language</code> to choose between Simplified Chinese, Traditional Chinese, or English. Some parts of the interface may require a restart to take effect.</p>
         <h3>7.3 Theme Adaptation</h3>
@@ -438,7 +449,7 @@
         </div>
         <div class="note">
             <strong>Q: How can I get software updates?</strong><br>
-            A: This is a course design project; version <code>1.0</code> is the final release. No update schedule is planned.
+            A: Version <code>2.0</code> includes interface, localization, visualization, anomaly detection, and backend performance improvements. Future updates will be published through the GitHub repository.
         </div>
 
         <h2>📋 10. Appendix: Data Format Reference</h2>
@@ -468,7 +479,7 @@
 
         <hr>
         <div class="footer">
-            ©2026 Na, Bian. All rights reserved. This manual was last updated on March 25, 2026.
+            ©2026 Na, Bian. All rights reserved. This manual was last updated on April 19, 2026.
         </div>
     </div>
 </body>

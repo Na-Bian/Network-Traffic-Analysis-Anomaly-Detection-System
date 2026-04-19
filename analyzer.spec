@@ -5,6 +5,8 @@ from PyInstaller.utils.hooks import collect_all
 
 # 使用 collect_all 自动处理 pyvis 的数据文件、二进制文件和隐藏导入
 pyvis_datas, pyvis_binaries, pyvis_hiddenimports = collect_all('pyvis')
+fluent_datas, fluent_binaries, fluent_hiddenimports = collect_all('qfluentwidgets')
+frameless_datas, frameless_binaries, frameless_hiddenimports = collect_all('qframelesswindow')
 
 block_cipher = None
 
@@ -19,15 +21,15 @@ a = Analysis(
     pathex=['.'],
     binaries=[
         ('backend/NetworkAnalyzerCore.exe', 'backend'),
-    ] + pyvis_binaries,
+    ] + pyvis_binaries + fluent_binaries + frameless_binaries,
     datas=[
         ('gui/*.py', 'gui'),
         ('backend/readPcap.py', 'backend'),
         ('backend/subgraph.py', 'backend'),
         ('resources', 'resources'),
-        ('lang_config.json', '.'),   # 加入语言配置文件
-    ] + pyvis_datas,
-    hiddenimports=pyvis_hiddenimports + additional_hiddenimports,
+        ('gui/i18n/locales', 'gui/i18n/locales'),
+    ] + pyvis_datas + fluent_datas + frameless_datas,
+    hiddenimports=pyvis_hiddenimports + fluent_hiddenimports + frameless_hiddenimports + additional_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -2,11 +2,12 @@
 import os
 import subprocess
 import sys
+from threading import Lock, Thread
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from backend.readPcap import save_to_csv
-from backend.subgraph import generate_html as generate_pyvis_html
+from backend.subgraph import generate_html as generate_graph_html
 
 
 # 连接C++后端
@@ -18,6 +19,8 @@ class AnalyzerWorker(QThread):
     def __init__(self, cmd, parent=None):
         super().__init__(parent)
         self.cmd = cmd
+        self.output_lines = []
+        self._output_lock = Lock()
 
     def run(self):
         try:
@@ -40,16 +43,21 @@ class AnalyzerWorker(QThread):
                 for line in iter(stream.readline, ''):
                     line = line.strip()
                     if line:
+                        with self._output_lock:
+                            self.output_lines.append(line)
                         if is_error:
                             self.error.emit(line)  # 错误信息用error信号
                         else:
                             self.output.emit(line)
 
-            from threading import Thread
-            Thread(target=read_stream, args=(proc.stdout, False), daemon=True).start()
-            Thread(target=read_stream, args=(proc.stderr, True), daemon=True).start()
+            stdout_thread = Thread(target=read_stream, args=(proc.stdout, False), daemon=True)
+            stderr_thread = Thread(target=read_stream, args=(proc.stderr, True), daemon=True)
+            stdout_thread.start()
+            stderr_thread.start()
 
             proc.wait()
+            stdout_thread.join()
+            stderr_thread.join()
 
             if proc.returncode != 0:
                 self.error.emit(f"进程退出，返回码: {proc.returncode}")
@@ -64,17 +72,29 @@ class AnalyzerWorker(QThread):
 class SubgraphWorker(QThread):
     success = pyqtSignal(str)  # 成功后传回 html_path
     error = pyqtSignal(str)
+    info = pyqtSignal(str)
 
-    def __init__(self, json_path, html_path, bgcolor, fontcolor, parent=None):
+    def __init__(self, json_path, html_path, bgcolor, fontcolor, render_options=None, parent=None):
         super().__init__(parent)
         self.json_path = json_path
         self.html_path = html_path
         self.bgcolor = bgcolor
         self.fontcolor = fontcolor
+        self.render_options = render_options or {}
 
     def run(self):
         try:
-            generate_pyvis_html(self.json_path, self.html_path, self.bgcolor, self.fontcolor)
+            render_info = generate_graph_html(
+                self.json_path,
+                self.html_path,
+                self.bgcolor,
+                self.fontcolor,
+                render_options=self.render_options,
+            )
+            if render_info:
+                self.info.emit(
+                    "render_mode:{renderer}:{mode}:{nodes}:{edges}".format(**render_info)
+                )
             self.success.emit(self.html_path)
         except Exception as e:
             self.error.emit(f"生成子图失败: {str(e)}")
