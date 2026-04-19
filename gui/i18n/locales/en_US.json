@@ -27,7 +27,7 @@
   "settings_runtime_title": "Runtime",
   "settings_runtime_desc": "Adjust the thread count used by backend analysis tasks.",
   "dashboard_kicker": "Network Analyzer",
-  "dashboard_headline": "Analyze Network Traffic and Detect Anomalous Behavior",
+  "dashboard_headline": "Analyze Traffic, Detect Anomalies",
   "dashboard_body": "Start from PCAP or CSV data, generate the topology automatically, run detection tasks, and export the results to a unified results center.",
   "dashboard_current_file_display": "Current Data File: {}",
   "dashboard_current_file_empty": "No file selected",

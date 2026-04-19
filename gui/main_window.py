@@ -695,8 +695,12 @@ class MainWindow(FluentWindow):
         if hasattr(self, "dashboard_hero_text_container") and self.dashboard_hero_text_container.width() > 0:
             available_width = min(available_width, self.dashboard_hero_text_container.width())
 
-        base_size = 29 if lang_mgr.current_lang == "en_US" else 21
-        min_size = 23 if lang_mgr.current_lang == "en_US" else 18
+        is_english = lang_mgr.current_lang == "en_US"
+        label.setWordWrap(False)
+        label.setMaximumWidth(760 if is_english else 880)
+
+        base_size = 24 if is_english else 21
+        min_size = 20 if is_english else 18
 
         font = label.font()
         for point_size in range(base_size, min_size - 1, -1):
@@ -747,6 +751,7 @@ class MainWindow(FluentWindow):
         card = CardWidget()
         card.setObjectName("dashboardMetricCard")
         card.setMinimumHeight(96)
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         layout = QHBoxLayout(card)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(12)
@@ -760,6 +765,7 @@ class MainWindow(FluentWindow):
         text_layout = QVBoxLayout()
         text_layout.setSpacing(3)
         title_label = StrongBodyLabel(tr(title_key, title_default))
+        title_label.setWordWrap(True)
         value_label = CaptionLabel(tr(desc_key, desc_default))
         value_label.setWordWrap(True)
         text_layout.addWidget(title_label)
