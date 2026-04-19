@@ -66,16 +66,23 @@ class SubgraphWorker(QThread):
     error = pyqtSignal(str)
     info = pyqtSignal(str)
 
-    def __init__(self, json_path, html_path, bgcolor, fontcolor, parent=None):
+    def __init__(self, json_path, html_path, bgcolor, fontcolor, render_options=None, parent=None):
         super().__init__(parent)
         self.json_path = json_path
         self.html_path = html_path
         self.bgcolor = bgcolor
         self.fontcolor = fontcolor
+        self.render_options = render_options or {}
 
     def run(self):
         try:
-            render_info = generate_graph_html(self.json_path, self.html_path, self.bgcolor, self.fontcolor)
+            render_info = generate_graph_html(
+                self.json_path,
+                self.html_path,
+                self.bgcolor,
+                self.fontcolor,
+                render_options=self.render_options,
+            )
             if render_info:
                 self.info.emit(
                     "render_mode:{renderer}:{mode}:{nodes}:{edges}".format(**render_info)

@@ -10,6 +10,16 @@ MEDIUM_GRAPH_NODES = 2000
 MEDIUM_GRAPH_EDGES = 6000
 
 
+def _edge_value(edge):
+    return edge.get("value", 0) or 0
+
+
+def _filter_top_k_edges(links, top_k_edges=0):
+    if not top_k_edges or top_k_edges <= 0 or len(links) <= top_k_edges:
+        return list(links)
+    return sorted(links, key=_edge_value, reverse=True)[:top_k_edges]
+
+
 def tr(_key, default):
     return default
 
@@ -124,10 +134,12 @@ def _load_graph(json_path):
             raise ValueError(tr("subgraph_error_json_corrupted", "错误：JSON 格式损坏"))
 
 
-def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white", data=None, mode=None):
+def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white",
+                    data=None, mode=None, render_options=None):
     data = data if data is not None else _load_graph(json_path)
     nodes = data.get("nodes", [])
-    links = data.get("links", [])
+    render_options = render_options or {}
+    links = _filter_top_k_edges(data.get("links", []), int(render_options.get("top_k_edges", 0) or 0))
     mode = mode or _graph_mode(len(nodes), len(links))
     performance_mode = mode == "performance"
     positioned_nodes = _position_nodes(nodes) if performance_mode else {}

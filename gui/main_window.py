@@ -260,6 +260,21 @@ class MainWindow(QMainWindow):
         self.thread_label.setText(tr("thread_count", "线程数:"))
         self.data_file_label.setText(tr("data_file", "数据文件:"))
         self.browse_btn.setText(tr("browse", "浏览..."))
+        self.render_mode_label.setText(tr("render_mode_label", "渲染模式:"))
+        self.render_mode_combo.setItemText(0, tr("render_mode_auto", "自动"))
+        self.render_mode_combo.setItemText(1, tr("render_mode_vis", "vis-network"))
+        self.render_mode_combo.setItemText(2, tr("render_mode_sigma", "Sigma"))
+        self.top_k_edges_label.setText(tr("render_top_k_edges_label", "Top-K 边:"))
+        self.top_k_edges_spin.setSpecialValueText(tr("render_top_k_edges_unlimited", "不限"))
+        self.top_k_edges_spin.setToolTip(tr(
+            "render_top_k_edges_tooltip",
+            "仅保留流量最大的 K 条边；0 表示不限制。"
+        ))
+        self.aggregate_graph_checkbox.setText(tr("render_aggregate_large_graph", "超大图按 /24 网段聚合"))
+        self.aggregate_graph_checkbox.setToolTip(tr(
+            "render_aggregate_large_graph_tooltip",
+            "当图规模很大且使用 Sigma 时，先显示网段级总览，点击节点展开局部子图。"
+        ))
 
         self.flow_sort_tab.retranslate_ui()
         self.path_tab.retranslate_ui()
@@ -374,6 +389,39 @@ class MainWindow(QMainWindow):
         file_layout.addWidget(self.browse_btn)
         file_layout.addStretch()
         self.main_layout.addLayout(file_layout)
+
+        # 渲染配置行
+        render_layout = QHBoxLayout()
+        self.render_mode_label = QLabel(tr("render_mode_label", "渲染模式:"))
+        render_layout.addWidget(self.render_mode_label)
+        self.render_mode_combo = QComboBox()
+        self.render_mode_combo.addItem(tr("render_mode_auto", "自动"), "auto")
+        self.render_mode_combo.addItem(tr("render_mode_vis", "vis-network"), "vis")
+        self.render_mode_combo.addItem(tr("render_mode_sigma", "Sigma"), "sigma")
+        self.render_mode_combo.setMinimumWidth(130)
+        render_layout.addWidget(self.render_mode_combo)
+
+        self.top_k_edges_label = QLabel(tr("render_top_k_edges_label", "Top-K 边:"))
+        render_layout.addWidget(self.top_k_edges_label)
+        self.top_k_edges_spin = QSpinBox()
+        self.top_k_edges_spin.setRange(0, 1000000)
+        self.top_k_edges_spin.setSingleStep(1000)
+        self.top_k_edges_spin.setSpecialValueText(tr("render_top_k_edges_unlimited", "不限"))
+        self.top_k_edges_spin.setToolTip(tr(
+            "render_top_k_edges_tooltip",
+            "仅保留流量最大的 K 条边；0 表示不限制。"
+        ))
+        render_layout.addWidget(self.top_k_edges_spin)
+
+        self.aggregate_graph_checkbox = QCheckBox(tr("render_aggregate_large_graph", "超大图按 /24 网段聚合"))
+        self.aggregate_graph_checkbox.setChecked(True)
+        self.aggregate_graph_checkbox.setToolTip(tr(
+            "render_aggregate_large_graph_tooltip",
+            "当图规模很大且使用 Sigma 时，先显示网段级总览，点击节点展开局部子图。"
+        ))
+        render_layout.addWidget(self.aggregate_graph_checkbox)
+        render_layout.addStretch()
+        self.main_layout.addLayout(render_layout)
 
         # 主分割器
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -683,6 +731,13 @@ class MainWindow(QMainWindow):
         self.task_handler.run_worker(cmd, task_type="full-graph", on_success=on_success_wrapper)
 
     # ---------- HTML生成与显示 ----------
+    def _render_options(self):
+        return {
+            "render_mode": self.render_mode_combo.currentData() or "auto",
+            "top_k_edges": self.top_k_edges_spin.value(),
+            "aggregate_large_graph": self.aggregate_graph_checkbox.isChecked(),
+        }
+
     def generate_html(self, json_path, html_path):
         if not os.path.exists(json_path) or os.path.getsize(json_path) == 0:
             self.log_text.append(tr("generate_html_json_invalid", "错误：JSON 文件无效或未能成功生成。"))
@@ -704,7 +759,13 @@ class MainWindow(QMainWindow):
         bgcolor, fontcolor = get_theme_colors()
         self.log_text.append(tr("generate_html_rendering", "正在渲染图表，请稍候..."))
 
-        self.subgraph_worker = SubgraphWorker(json_path, html_path, bgcolor, fontcolor)
+        self.subgraph_worker = SubgraphWorker(
+            json_path,
+            html_path,
+            bgcolor,
+            fontcolor,
+            render_options=self._render_options(),
+        )
 
         def on_render_success(generated_html_path):
             try:
