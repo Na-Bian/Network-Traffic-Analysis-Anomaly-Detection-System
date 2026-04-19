@@ -899,7 +899,7 @@ class MainWindow(FluentWindow):
     def _apply_window_effects(self):
         """Enable Win11 Mica while keeping qfluent popup composition stable."""
         is_win11 = sys.platform == "win32" and sys.getwindowsversion().build >= 22000
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, is_win11)
         self.setMicaEffectEnabled(is_win11)
 
         if not is_win11:
