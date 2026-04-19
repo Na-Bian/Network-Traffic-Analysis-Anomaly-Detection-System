@@ -625,9 +625,6 @@ class MainWindow(FluentWindow):
         self.update_webview_theme()
         self.update_log_detail_theme()
         self._refresh_quick_card_icons()
-        if hasattr(self, "titleBar") and self.titleBar is not None:
-            self.titleBar.update()
-            self.titleBar.repaint()
         self.update()
 
     def _build_fluent_pages(self):
