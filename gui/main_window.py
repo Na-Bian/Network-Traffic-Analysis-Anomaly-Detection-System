@@ -695,14 +695,14 @@ class MainWindow(FluentWindow):
         if hasattr(self, "dashboard_hero_text_container") and self.dashboard_hero_text_container.width() > 0:
             available_width = min(available_width, self.dashboard_hero_text_container.width())
 
-        base_size = 31 if lang_mgr.current_lang == "en_US" else 27
-        min_size = 24 if lang_mgr.current_lang == "en_US" else 22
+        base_size = 29 if lang_mgr.current_lang == "en_US" else 21
+        min_size = 23 if lang_mgr.current_lang == "en_US" else 18
 
         font = label.font()
         for point_size in range(base_size, min_size - 1, -1):
             test_font = QFont(font)
             test_font.setPointSize(point_size)
-            if QFontMetrics(test_font).horizontalAdvance(text) <= max(320, available_width):
+            if QFontMetrics(test_font).horizontalAdvance(text) <= max(320, available_width - 8):
                 label.setFont(test_font)
                 return
 
@@ -737,11 +737,11 @@ class MainWindow(FluentWindow):
             self.about_btn.setMinimumWidth(max(92, min(132, text_width(self.about_btn.text()) + 44)))
 
         if self.open_command_button is not None:
-            self.open_command_button.setFixedWidth(max(164, min(236, text_width(self.open_command_button.text()) + 72)))
+            self.open_command_button.setFixedWidth(max(152, min(214, text_width(self.open_command_button.text()) + 62)))
         if self.export_command_button is not None:
-            self.export_command_button.setFixedWidth(max(126, min(172, text_width(self.export_command_button.text()) + 86)))
+            self.export_command_button.setFixedWidth(max(118, min(156, text_width(self.export_command_button.text()) + 76)))
         if self.manual_command_button is not None:
-            self.manual_command_button.setFixedWidth(max(152, min(216, text_width(self.manual_command_button.text()) + 72)))
+            self.manual_command_button.setFixedWidth(max(140, min(198, text_width(self.manual_command_button.text()) + 62)))
 
     def _create_metric_card(self, parent_layout, icon, title_key, title_default, desc_key, desc_default):
         card = CardWidget()
@@ -1079,7 +1079,7 @@ class MainWindow(FluentWindow):
         self.dashboard_kicker_label = CaptionLabel(tr("dashboard_kicker", "Network Analyzer"))
         self.dashboard_kicker_label.setObjectName("dashboardKicker")
         self.dashboard_headline_label = TitleLabel(tr("dashboard_headline", "分析网络流量，监测异常行为"))
-        self.dashboard_headline_label.setWordWrap(True)
+        self.dashboard_headline_label.setWordWrap(False)
         self.dashboard_headline_label.setMaximumWidth(880)
         self.dashboard_body_label = BodyLabel(tr(
             "dashboard_body",
@@ -1116,14 +1116,17 @@ class MainWindow(FluentWindow):
         command_bar_layout.setContentsMargins(0, 0, 0, 0)
         command_bar_layout.setSpacing(10)
         self.open_command_button = PushButton(FIF.FOLDER, tr("open_file", "打开数据文件"))
+        self.open_command_button.setObjectName("dashboardCommandButton")
         self.open_command_button.setFixedHeight(34)
         self.open_command_button.clicked.connect(self.browse_file)
         command_bar_layout.addWidget(self.open_command_button)
         self.export_command_button = DropDownPushButton(FIF.SAVE, tr("export_menu", "导出"))
+        self.export_command_button.setObjectName("dashboardCommandButton")
         self.export_command_button.setMenu(self.export_menu)
         self.export_command_button.setFixedHeight(34)
         command_bar_layout.addWidget(self.export_command_button)
         self.manual_command_button = PushButton(FIF.HELP, tr("help_manual", "用户手册"))
+        self.manual_command_button.setObjectName("dashboardCommandButton")
         self.manual_command_button.setFixedHeight(34)
         self.manual_command_button.clicked.connect(self.show_manual)
         command_bar_layout.addWidget(self.manual_command_button)
@@ -1909,6 +1912,10 @@ class MainWindow(FluentWindow):
                 color: {accent};
                 font-size: 14px;
                 font-weight: 600;
+            }}
+            #dashboardCommandButton {{
+                font-size: 13px;
+                font-weight: 500;
             }}
             Pivot {{
                 background: transparent;

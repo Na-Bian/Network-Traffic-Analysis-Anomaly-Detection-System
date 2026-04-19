@@ -26,7 +26,7 @@
   "settings_theme_dark": "深色",
   "settings_runtime_title": "執行參數",
   "settings_runtime_desc": "調整後端分析任務使用的執行緒數量。",
-  "dashboard_kicker": "Network Analyzer",
+  "dashboard_kicker": "網路分析系統",
   "dashboard_headline": "分析網路流量，監測異常行為",
   "dashboard_body": "從 PCAP 或 CSV 資料開始，自動生成拓撲、執行檢測任務，並把結果導出到統一的結果中心。",
   "dashboard_current_file_display": "目前資料檔案：{}",
