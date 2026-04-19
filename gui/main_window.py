@@ -377,12 +377,24 @@ class MainWindow(FluentWindow):
         self.topology_interface.title_label.setText(tr("nav_topology", "拓扑视图"))
         self.topology_interface.subtitle_label.setText(tr("topology_subtitle", "查看全网拓扑、子图和大图渲染结果"))
         self.traffic_interface.title_label.setText(tr("traffic_sorting", "流量排序"))
+        self.traffic_interface.subtitle_label.setText(tr("traffic_subtitle", "按总流量、HTTPS 或出流量占比分析关键流"))
         self.path_interface.title_label.setText(tr("path_search", "路径查找"))
+        self.path_interface.subtitle_label.setText(tr("path_subtitle", "比较最小拥塞、最小跳数和最小风险路径"))
         self.anomaly_interface.title_label.setText(tr("anomaly_detection", "异常检测"))
+        self.anomaly_interface.subtitle_label.setText(tr("anomaly_subtitle", "端口扫描、DDoS 目标和星型结构检测"))
         self.rule_interface.title_label.setText(tr("anomaly_tab_custom_rule", "自定义规则"))
+        self.rule_interface.subtitle_label.setText(tr("rule_subtitle", "用组合条件快速表达业务侧检测规则"))
         self.subgraph_interface.title_label.setText(tr("subgraph_visualization", "子图可视化"))
+        self.subgraph_interface.subtitle_label.setText(tr("subgraph_subtitle", "围绕指定 IP 生成局部拓扑"))
         self.results_interface.title_label.setText(tr("nav_results", "结果中心"))
+        self.results_interface.subtitle_label.setText(tr("results_subtitle", "运行日志、表格结果和路径详情"))
         self.settings_interface.title_label.setText(tr("settings", "设置"))
+        self.settings_interface.subtitle_label.setText(tr("settings_subtitle", "语言、帮助和工程运行选项"))
+        self.traffic_feature_card.setTitle(tr("traffic_sorting", "流量排序"))
+        self.path_feature_card.setTitle(tr("path_search", "路径查找"))
+        self.anomaly_feature_card.setTitle(tr("anomaly_detection", "异常检测"))
+        self.rule_feature_card.setTitle(tr("anomaly_tab_custom_rule", "自定义规则"))
+        self.subgraph_feature_card.setTitle(tr("subgraph_visualization", "子图可视化"))
         self.output_pivot.setItemText("log", tr("output_log_tab", "运行日志"))
         self.output_pivot.setItemText("table", tr("output_table_tab", "数据表格"))
         self.output_pivot.setItemText("detail", tr("output_detail_tab", "路径与详情"))
@@ -662,11 +674,21 @@ class MainWindow(FluentWindow):
 
         self._build_dashboard_page()
         self._build_topology_page()
-        self._build_feature_page(self.traffic_interface, self.flow_sort_tab, tr("traffic_sorting", "流量排序"))
-        self._build_feature_page(self.path_interface, self.path_tab, tr("path_search", "路径查找"))
-        self._build_feature_page(self.anomaly_interface, self.anomaly_tab, tr("anomaly_detection", "异常检测"))
-        self._build_feature_page(self.rule_interface, self.custom_rule_tab, tr("anomaly_tab_custom_rule", "自定义规则"))
-        self._build_feature_page(self.subgraph_interface, self.subgraph_tab, tr("subgraph_visualization", "子图可视化"))
+        self.traffic_feature_card = self._build_feature_page(
+            self.traffic_interface, self.flow_sort_tab, tr("traffic_sorting", "流量排序")
+        )
+        self.path_feature_card = self._build_feature_page(
+            self.path_interface, self.path_tab, tr("path_search", "路径查找")
+        )
+        self.anomaly_feature_card = self._build_feature_page(
+            self.anomaly_interface, self.anomaly_tab, tr("anomaly_detection", "异常检测")
+        )
+        self.rule_feature_card = self._build_feature_page(
+            self.rule_interface, self.custom_rule_tab, tr("anomaly_tab_custom_rule", "自定义规则")
+        )
+        self.subgraph_feature_card = self._build_feature_page(
+            self.subgraph_interface, self.subgraph_tab, tr("subgraph_visualization", "子图可视化")
+        )
         self._build_results_page()
         self._build_settings_page()
         self.navigationInterface.setExpandWidth(228)
@@ -789,6 +811,7 @@ class MainWindow(FluentWindow):
         card.viewLayout.addWidget(widget)
         page.page_layout.addWidget(card)
         page.page_layout.addStretch()
+        return card
 
     def _build_results_page(self):
         layout = self.results_interface.page_layout
