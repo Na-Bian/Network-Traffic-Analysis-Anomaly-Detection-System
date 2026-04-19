@@ -2,7 +2,6 @@
 import re
 
 from PyQt6.QtCore import QObject, QTime
-from PyQt6.QtWidgets import QTableWidgetItem
 
 from .translator import tr, translate_backend_output, translate_violation_reason
 from .worker import AnalyzerWorker
@@ -41,7 +40,7 @@ class TaskHandler(QObject):
         self.main.result_detail.clear()
         self.task_output_buffer.clear()
 
-        self._show_output_view("log")
+        self.main.show_output_route("log")
 
         self.worker = AnalyzerWorker(cmd)
         self.worker.output.connect(self.handle_worker_output)
@@ -111,35 +110,9 @@ class TaskHandler(QObject):
             self.parse_star_to_table()
 
         if self.main.result_table.rowCount() > 0:
-            self._show_output_view("table")
+            self.main.show_output_route("table")
         elif len(self.main.result_detail.toPlainText()) > 0:
-            self._show_output_view("detail")
-
-    def _show_output_view(self, route_key):
-        """Switch to the requested output view across old and new result layouts."""
-        pivot = getattr(self.main, "output_pivot", None)
-        stack = getattr(self.main, "output_stack", None)
-
-        if pivot is not None and stack is not None:
-            widgets = {
-                "log": self.main.log_text,
-                "table": self.main.result_table,
-                "detail": self.main.result_detail,
-            }
-            widget = widgets.get(route_key)
-            if widget is not None:
-                pivot.setCurrentItem(route_key)
-                stack.setCurrentWidget(widget)
-
-            results_interface = getattr(self.main, "results_interface", None)
-            if results_interface is not None:
-                self.main.switchTo(results_interface)
-            return
-
-        output_tabs = getattr(self.main, "output_tabs", None)
-        if output_tabs is not None:
-            index = {"log": 0, "table": 1, "detail": 2}.get(route_key, 0)
-            output_tabs.setCurrentIndex(index)
+            self.main.show_output_route("detail")
 
     def parse_custom_rule_to_table(self):
         """将自定义规则检测结果填入表格"""
@@ -151,8 +124,7 @@ class TaskHandler(QObject):
             tr("custom_rule_table_header_dst_port", "目的端口"),
             tr("custom_rule_table_header_reason", "违规原因")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [18, 18, 10, 10, 10, 34])
 
         pattern = r"^\s*([\d\.]+) -> ([\d\.]+) \[proto=(\d+), srcPort=(\d+), dstPort=(\d+)\] reason: (.+)$"
         row_idx = 0
@@ -162,12 +134,12 @@ class TaskHandler(QObject):
                 src_ip, dst_ip, protocol, src_port, dst_port, reason = match.groups()
                 localized_reason = translate_violation_reason(reason)
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(src_ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(dst_ip))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(protocol))
-                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(src_port))
-                self.main.result_table.setItem(row_idx, 4, QTableWidgetItem(dst_port))
-                self.main.result_table.setItem(row_idx, 5, QTableWidgetItem(localized_reason))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(src_ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(dst_ip))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(protocol))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(src_port))
+                self.main.result_table.setItem(row_idx, 4, self.main.centered_table_item(dst_port))
+                self.main.result_table.setItem(row_idx, 5, self.main.centered_table_item(localized_reason))
                 row_idx += 1
 
     def parse_flow_sort_to_table(self):
@@ -200,8 +172,7 @@ class TaskHandler(QObject):
         if not headers:
             return
 
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [34, 22] if len(headers) == 2 else [24, 24, 18])
 
         row_idx = 0
         for line in self.task_output_buffer:
@@ -209,7 +180,7 @@ class TaskHandler(QObject):
             if match:
                 self.main.result_table.insertRow(row_idx)
                 for col, val in enumerate(match.groups()):
-                    self.main.result_table.setItem(row_idx, col, QTableWidgetItem(val))
+                    self.main.result_table.setItem(row_idx, col, self.main.centered_table_item(val))
                 row_idx += 1
 
     def parse_port_scan_to_table(self):
@@ -221,8 +192,7 @@ class TaskHandler(QObject):
             tr("flow_sort_table_header_out_ratio", "出流量占比"),
             tr("flow_sort_table_header_total_traffic", "总流量（字节）")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [20, 12, 12, 18, 14, 24])
 
         row_idx = 0
         for line in self.task_output_buffer:
@@ -236,12 +206,12 @@ class TaskHandler(QObject):
                     "mixed": tr("port_scan_type_mixed", "混合扫描")
                 }.get(scan_type, scan_type)
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(port_count))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(target_count))
-                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(scan_type))
-                self.main.result_table.setItem(row_idx, 4, QTableWidgetItem(ratio))
-                self.main.result_table.setItem(row_idx, 5, QTableWidgetItem(total_traffic))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(port_count))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(target_count))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(scan_type))
+                self.main.result_table.setItem(row_idx, 4, self.main.centered_table_item(ratio))
+                self.main.result_table.setItem(row_idx, 5, self.main.centered_table_item(total_traffic))
                 row_idx += 1
 
     def parse_ddos_to_table(self):
@@ -252,8 +222,7 @@ class TaskHandler(QObject):
             tr("ddos_table_header_in_data", "入流量（字节）"),
             tr("ddos_table_header_in_ratio", "入流量占比")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [24, 18, 28, 18])
 
         row_idx = 0
         for line in self.task_output_buffer:
@@ -262,10 +231,10 @@ class TaskHandler(QObject):
             if match:
                 ip, neighbor_count, in_data, in_ratio = match.groups()
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(neighbor_count))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(in_data))
-                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(in_ratio))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(neighbor_count))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(in_data))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(in_ratio))
                 row_idx += 1
 
     def parse_star_to_table(self):
@@ -278,8 +247,7 @@ class TaskHandler(QObject):
             tr("star_table_header_out_data", "出流量（字节）"),
             tr("star_table_header_leaf_ratio", "叶子占比")
         ]
-        self.main.result_table.setColumnCount(len(headers))
-        self.main.result_table.setHorizontalHeaderLabels(headers)
+        self.main.configure_result_table(headers, [20, 14, 18, 18, 18, 12])
 
         # 正则中的“星型”等是后端固定输出，不翻译
         pattern = r"星型 \d+: 中心=([\d\.]+), 邻居数=(\d+), 总流量=(\d+), 入流量=(\d+), 出流量=(\d+), 叶子占比=([\d\.]+)"
@@ -289,12 +257,12 @@ class TaskHandler(QObject):
             if match:
                 center_ip, neighbor_count, total, in_data, out_data, leaf_ratio = match.groups()
                 self.main.result_table.insertRow(row_idx)
-                self.main.result_table.setItem(row_idx, 0, QTableWidgetItem(center_ip))
-                self.main.result_table.setItem(row_idx, 1, QTableWidgetItem(neighbor_count))
-                self.main.result_table.setItem(row_idx, 2, QTableWidgetItem(total))
-                self.main.result_table.setItem(row_idx, 3, QTableWidgetItem(in_data))
-                self.main.result_table.setItem(row_idx, 4, QTableWidgetItem(out_data))
-                self.main.result_table.setItem(row_idx, 5, QTableWidgetItem(leaf_ratio))
+                self.main.result_table.setItem(row_idx, 0, self.main.centered_table_item(center_ip))
+                self.main.result_table.setItem(row_idx, 1, self.main.centered_table_item(neighbor_count))
+                self.main.result_table.setItem(row_idx, 2, self.main.centered_table_item(total))
+                self.main.result_table.setItem(row_idx, 3, self.main.centered_table_item(in_data))
+                self.main.result_table.setItem(row_idx, 4, self.main.centered_table_item(out_data))
+                self.main.result_table.setItem(row_idx, 5, self.main.centered_table_item(leaf_ratio))
                 row_idx += 1
 
     def parse_path_to_detail(self):

@@ -75,6 +75,9 @@ def _generate_manual_theme_style(is_dark: bool) -> str:
     if is_dark:
         return """
         <style>
+            html {
+                background-color: #1e1e1e !important;
+            }
             body {
                 background-color: #1e1e1e !important;
                 color: #e0e0e0 !important;
@@ -82,6 +85,9 @@ def _generate_manual_theme_style(is_dark: bool) -> str:
             .container {
                 background-color: #2d2d2d !important;
                 box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+            }
+            h1, h2, h3, p, li, ol, ul, strong, span, div {
+                color: inherit !important;
             }
             .feature-card {
                 background-color: #3c3c3c !important;
@@ -95,6 +101,9 @@ def _generate_manual_theme_style(is_dark: bool) -> str:
             }
             h1, h2, h3 {
                 color: #ffffff !important;
+            }
+            h2 {
+                background: linear-gradient(90deg, rgba(49, 105, 196, 0.22), transparent) !important;
             }
             .subhead, .subtitle {
                 color: #aaaaaa !important;
@@ -111,10 +120,17 @@ def _generate_manual_theme_style(is_dark: bool) -> str:
             tr:nth-child(even) {
                 background-color: #333333 !important;
             }
+            tr:nth-child(odd) {
+                background-color: #2d2d2d !important;
+            }
             code {
                 background-color: #3c3c3c !important;
                 color: #f08d49 !important;
                 border-color: #666 !important;
+            }
+            pre {
+                background-color: #161b22 !important;
+                color: #dfe7f3 !important;
             }
             .note, .tip, .warning {
                 background-color: #3c3c3c !important;
@@ -136,8 +152,17 @@ def _generate_manual_theme_style(is_dark: bool) -> str:
                 background-color: #3c3c3c !important;
                 color: #aaaaaa !important;
             }
+            .shortcut {
+                background-color: #343c47 !important;
+                color: #dce6f3 !important;
+                border-color: #4c5969 !important;
+            }
             .footer {
                 color: #888888 !important;
+                border-top-color: #454545 !important;
+            }
+            hr {
+                border-top-color: #454545 !important;
             }
             ::-webkit-scrollbar {
                 width: 8px;
@@ -237,6 +262,11 @@ class MainWindow(FluentWindow):
         self.current_html_original_path = None  # 当前显示子图的原始HTML
         self.current_html_display_path = None  # 当前显示子图的显示HTML，将CDN替换为本地资源
         self.quick_card_icons = []
+        self.quick_card_texts = []
+        self.dashboard_metric_texts = []
+        self.dashboard_current_file_name = None
+        self.dashboard_status_key = "dashboard_ready"
+        self.dashboard_status_default = "等待导入数据"
 
         # 导出 actions
         self.export_pcap_csv_action = None
@@ -262,6 +292,11 @@ class MainWindow(FluentWindow):
             self._centered_on_first_show = True
             QTimer.singleShot(0, self.center_on_screen)
         QTimer.singleShot(0, self._refresh_theme_visuals)
+        QTimer.singleShot(0, self._refresh_titlebar_layout)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._refresh_titlebar_layout()
 
     def center_on_screen(self):
         """Place the window at the center of the active screen on first launch."""
@@ -419,6 +454,7 @@ class MainWindow(FluentWindow):
             self.theme_combo.setItemText(0, tr("settings_theme_auto", "跟随系统"))
             self.theme_combo.setItemText(1, tr("settings_theme_light", "浅色"))
             self.theme_combo.setItemText(2, tr("settings_theme_dark", "深色"))
+        self._retranslate_dashboard_cards()
         self._set_navigation_texts()
         self._refresh_quick_card_icons()
 
@@ -503,7 +539,14 @@ class MainWindow(FluentWindow):
 
         self.result_table = TableWidget()
         self.result_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.result_table.horizontalHeader().setStretchLastSection(True)
+        self.result_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.result_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.result_table.setWordWrap(False)
+        self.result_table.verticalHeader().setVisible(False)
+        self.result_table.verticalHeader().setDefaultSectionSize(40)
+        self.result_table.horizontalHeader().setStretchLastSection(False)
+        self.result_table.horizontalHeader().setHighlightSections(False)
+        self.result_table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.result_detail = QTextBrowser()
         self.result_detail.setStyleSheet("font-family: Consolas, monospace; font-size: 13px;")
@@ -514,6 +557,7 @@ class MainWindow(FluentWindow):
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
 
         self._build_fluent_pages()
+        self._apply_shell_polish()
 
         # 连接按钮信号
         self.flow_sort_tab.flow_sort_btn.clicked.connect(self.run_flow_sort)
@@ -535,8 +579,8 @@ class MainWindow(FluentWindow):
         content = QWidget(page)
         content.setObjectName(f"{object_name}_content")
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(32, 18, 32, 28)
-        layout.setSpacing(16)
+        layout.setContentsMargins(40, 26, 40, 34)
+        layout.setSpacing(18)
 
         title_label = TitleLabel(title)
         subtitle_label = CaptionLabel(subtitle)
@@ -554,8 +598,8 @@ class MainWindow(FluentWindow):
     def _create_card(self, title, subtitle=None):
         card = CardWidget()
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 16, 20, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(24, 20, 24, 22)
+        layout.setSpacing(12)
         title_label = StrongBodyLabel(title)
         layout.addWidget(title_label)
         subtitle_label = None
@@ -587,12 +631,87 @@ class MainWindow(FluentWindow):
             if item and hasattr(item, "setText"):
                 item.setText(text)
 
-    def _add_quick_card(self, parent_layout, icon, title, description, button_text, target):
+    def _retranslate_dashboard_cards(self):
+        if hasattr(self, "dashboard_kicker_label"):
+            self.dashboard_kicker_label.setText(tr("dashboard_kicker", "Network Analyzer"))
+            self.dashboard_headline_label.setText(tr("dashboard_headline", "分析网络流量，监测异常行为"))
+            self.dashboard_body_label.setText(tr(
+                "dashboard_body",
+                "从 PCAP 或 CSV 数据开始，自动生成拓扑、运行检测任务，并把结果导出到统一的结果中心。"
+            ))
+            self.dashboard_command_title_label.setText(tr("dashboard_command_title", "开始分析"))
+            self.dashboard_command_desc_label.setText(
+                tr("dashboard_command_desc", "选择数据文件后，系统会自动生成全网拓扑并激活分析功能。")
+            )
+            self._refresh_dashboard_file_caption()
+            self.dashboard_status_label.setText(
+                tr(self.dashboard_status_key, self.dashboard_status_default)
+            )
+
+        for label, value, title_key, title_default, desc_key, desc_default in self.dashboard_metric_texts:
+            label.setText(tr(title_key, title_default))
+            value.setText(tr(desc_key, desc_default))
+
+        for title_label, desc_label, button, title_key, title_default, desc_key, desc_default in self.quick_card_texts:
+            title_label.setText(tr(title_key, title_default))
+            desc_label.setText(tr(desc_key, desc_default))
+            button.setText(tr("quick_open", "打开"))
+
+    def _set_dashboard_status(self, key, default):
+        self.dashboard_status_key = key
+        self.dashboard_status_default = default
+        if hasattr(self, "dashboard_status_label"):
+            self.dashboard_status_label.setText(tr(key, default))
+
+    def _refresh_dashboard_file_caption(self):
+        if not hasattr(self, "dashboard_file_caption"):
+            return
+
+        file_name = self.dashboard_current_file_name or tr("dashboard_current_file_empty", "未选择文件")
+        self.dashboard_file_caption.setText(
+            tr("dashboard_current_file_display", "当前数据文件：{}").format(file_name)
+        )
+
+    def _set_dashboard_current_file(self, file_path=None):
+        self.dashboard_current_file_name = os.path.basename(file_path) if file_path else None
+        self._refresh_dashboard_file_caption()
+
+    def _create_metric_card(self, parent_layout, icon, title_key, title_default, desc_key, desc_default):
         card = CardWidget()
-        card.setMinimumHeight(118)
+        card.setObjectName("dashboardMetricCard")
+        card.setMinimumHeight(96)
         layout = QHBoxLayout(card)
         layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(30, 30)
+        icon_label.setPixmap(icon.icon(theme=Theme.DARK if isDarkTheme() else Theme.LIGHT).pixmap(28, 28))
+        layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
+        self.quick_card_icons.append((icon_label, icon))
+
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(3)
+        title_label = StrongBodyLabel(tr(title_key, title_default))
+        value_label = CaptionLabel(tr(desc_key, desc_default))
+        value_label.setWordWrap(True)
+        text_layout.addWidget(title_label)
+        text_layout.addWidget(value_label)
+        layout.addLayout(text_layout, 1)
+        parent_layout.addWidget(card)
+        self.dashboard_metric_texts.append(
+            (title_label, value_label, title_key, title_default, desc_key, desc_default)
+        )
+        return card
+
+    def _add_quick_card(self, parent_layout, icon, title, description, button_text, target,
+                        title_key=None, title_default=None, desc_key=None, desc_default=None):
+        card = CardWidget()
+        card.setObjectName("dashboardQuickCard")
+        card.setMinimumHeight(126)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(16)
 
         icon_label = QLabel()
         icon_label.setFixedSize(36, 36)
@@ -613,6 +732,10 @@ class MainWindow(FluentWindow):
         button.clicked.connect(lambda: self._switch_to_interface(target))
         layout.addWidget(button)
         parent_layout.addWidget(card)
+        if title_key and desc_key:
+            self.quick_card_texts.append(
+                (title_label, desc_label, button, title_key, title_default or title, desc_key, desc_default or description)
+            )
         return card
 
     def _refresh_quick_card_icons(self):
@@ -624,8 +747,163 @@ class MainWindow(FluentWindow):
         self._apply_window_effects()
         self.update_webview_theme()
         self.update_log_detail_theme()
+        self._refresh_titlebar_theme()
+        self._refresh_navigation_visuals()
         self._refresh_quick_card_icons()
         self.update()
+
+    def _apply_shell_polish(self):
+        if hasattr(self, "titleBar") and self.titleBar is not None:
+            self.titleBar.setFixedHeight(48)
+            if hasattr(self.titleBar, "hBoxLayout"):
+                self.titleBar.hBoxLayout.setContentsMargins(20, 0, 14, 0)
+                self.titleBar.hBoxLayout.setSpacing(0)
+            if hasattr(self.titleBar, "iconLabel"):
+                self.titleBar.iconLabel.setFixedSize(18, 18)
+            if hasattr(self.titleBar, "titleLabel"):
+                self.titleBar.titleLabel.setStyleSheet(
+                    "font-size: 13px; font-weight: 600; background: transparent;"
+                )
+                self.titleBar.titleLabel.setContentsMargins(12, 0, 12, 0)
+                self.titleBar.titleLabel.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+
+        self._refresh_titlebar_layout()
+
+        if hasattr(self, "navigationInterface") and self.navigationInterface is not None:
+            self.navigationInterface.setExpandWidth(244)
+            self.navigationInterface.setMinimumExpandWidth(196)
+            self.navigationInterface.expand(useAni=False)
+
+    def _refresh_titlebar_layout(self):
+        if not hasattr(self, "titleBar") or self.titleBar is None or not hasattr(self.titleBar, "titleLabel"):
+            return
+
+        title_label = self.titleBar.titleLabel
+        metrics = title_label.fontMetrics()
+        natural_width = metrics.horizontalAdvance(title_label.text()) + 28
+        available_width = max(220, self.width() - 340)
+        title_label.setFixedWidth(min(natural_width, available_width))
+
+    def _refresh_navigation_visuals(self):
+        if not hasattr(self, "navigationInterface") or self.navigationInterface is None:
+            return
+
+        for interface in (
+            self.workbench_interface,
+            self.topology_interface,
+            self.traffic_interface,
+            self.path_interface,
+            self.anomaly_interface,
+            self.rule_interface,
+            self.subgraph_interface,
+            self.results_interface,
+            self.settings_interface,
+        ):
+            item = self.navigationInterface.widget(interface.objectName())
+            if not item:
+                continue
+            item.setMinimumHeight(40)
+            item.setProperty("isEnterEnabled", True)
+            if hasattr(item, "setIconSize"):
+                item.setIconSize(QSize(18, 18))
+            item.setStyleSheet(
+                "font-size: 13px; font-weight: 500; border-radius: 8px;"
+            )
+
+    def _refresh_titlebar_theme(self):
+        if not hasattr(self, "titleBar") or self.titleBar is None:
+            return
+
+        dark = isDarkTheme()
+        titlebar_bg = QColor("#1f1f1f" if dark else "#f7f3ee")
+        hover_bg = QColor("#2d2d2d" if dark else "#ebe5de")
+        pressed_bg = QColor("#3a3a3a" if dark else "#ddd6ce")
+        text_color = QColor("#ffffff" if dark else "#000000")
+
+        self.titleBar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.titleBar.setStyleSheet(
+            f"background-color: {titlebar_bg.name()}; border: none;"
+        )
+
+        for button in (self.titleBar.minBtn, self.titleBar.maxBtn):
+            button.setNormalBackgroundColor(titlebar_bg)
+            button.setHoverBackgroundColor(hover_bg)
+            button.setPressedBackgroundColor(pressed_bg)
+            button.setNormalColor(text_color)
+            button.setHoverColor(text_color)
+            button.setPressedColor(text_color)
+
+        self.titleBar.closeBtn.setNormalBackgroundColor(titlebar_bg)
+        self.titleBar.closeBtn.setNormalColor(text_color)
+
+    def _show_fluent_dialog(self, title, content, level="info"):
+        box = MessageBox(title, content, self)
+        box.yesButton.setText(tr("ok", "确定"))
+        box.cancelButton.hide()
+        box.hideCancelButton()
+        box.setMinimumWidth(460)
+        box.setContentCopyable(level == "error")
+
+        if level == "success":
+            box.yesButton.setText(tr("done", "完成"))
+        elif level == "warning":
+            box.yesButton.setText(tr("got_it", "知道了"))
+        elif level == "error":
+            box.yesButton.setText(tr("close", "关闭"))
+
+        box.exec()
+
+    def _show_warning_dialog(self, title, content):
+        self._show_fluent_dialog(title, content, level="warning")
+
+    def _show_error_dialog(self, title, content):
+        self._show_fluent_dialog(title, content, level="error")
+
+    def _show_success_dialog(self, title, content):
+        self._show_fluent_dialog(title, content, level="success")
+
+    def show_output_route(self, route_key):
+        widgets = {
+            "log": getattr(self, "log_text", None),
+            "table": getattr(self, "result_table", None),
+            "detail": getattr(self, "result_detail", None),
+        }
+        widget = widgets.get(route_key)
+        if widget is None:
+            return
+
+        if hasattr(self, "output_stack") and self.output_stack is not None:
+            self.output_stack.setCurrentWidget(widget)
+        if hasattr(self, "output_pivot") and self.output_pivot is not None:
+            self.output_pivot.setCurrentItem(route_key)
+        if hasattr(self, "results_interface") and self.results_interface is not None:
+            self.switchTo(self.results_interface)
+
+    def configure_result_table(self, headers, width_weights=None):
+        self.result_table.clear()
+        self.result_table.setRowCount(0)
+        self.result_table.setColumnCount(len(headers))
+        self.result_table.setHorizontalHeaderLabels(headers)
+
+        header = self.result_table.horizontalHeader()
+        default_weights = width_weights or [1] * len(headers)
+        total_weight = max(1, sum(default_weights))
+        table_width = max(900, self.result_table.viewport().width(), self.width() - 420)
+
+        for index, weight in enumerate(default_weights):
+            width = int(table_width * weight / total_weight)
+            header.setSectionResizeMode(index, QHeaderView.ResizeMode.Interactive)
+            self.result_table.setColumnWidth(index, max(110, width))
+
+        if headers:
+            last_index = len(headers) - 1
+            header.setSectionResizeMode(last_index, QHeaderView.ResizeMode.Stretch)
+
+    @staticmethod
+    def centered_table_item(text):
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        return item
 
     def _build_fluent_pages(self):
         self.workbench_interface = self._create_page(
@@ -708,18 +986,58 @@ class MainWindow(FluentWindow):
         )
         self._build_results_page()
         self._build_settings_page()
-        self.navigationInterface.setExpandWidth(228)
-        self.navigationInterface.setMinimumExpandWidth(180)
-        self.navigationInterface.expand(useAni=False)
         self._refresh_quick_card_icons()
 
     def _build_dashboard_page(self):
         layout = self.workbench_interface.page_layout
 
-        command_card = self._create_card(
-            tr("dashboard_command_title", "开始分析"),
+        hero_card = CardWidget()
+        hero_card.setObjectName("dashboardHeroCard")
+        hero_layout = QHBoxLayout(hero_card)
+        hero_layout.setContentsMargins(28, 26, 28, 26)
+        hero_layout.setSpacing(24)
+
+        hero_text_layout = QVBoxLayout()
+        hero_text_layout.setSpacing(10)
+        hero_text_container = QWidget()
+        hero_text_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        hero_text_container.setMaximumWidth(760)
+        hero_text_container.setLayout(hero_text_layout)
+        self.dashboard_kicker_label = CaptionLabel(tr("dashboard_kicker", "Network Analyzer"))
+        self.dashboard_kicker_label.setObjectName("dashboardKicker")
+        self.dashboard_headline_label = TitleLabel(tr("dashboard_headline", "分析网络流量，监测异常行为"))
+        self.dashboard_headline_label.setWordWrap(True)
+        self.dashboard_headline_label.setMaximumWidth(760)
+        self.dashboard_body_label = BodyLabel(tr(
+            "dashboard_body",
+            "从 PCAP 或 CSV 数据开始，自动生成拓扑、运行检测任务，并把结果导出到统一的结果中心。"
+        ))
+        self.dashboard_body_label.setObjectName("dashboardBody")
+        self.dashboard_body_label.setWordWrap(True)
+        self.dashboard_body_label.setMaximumWidth(720)
+        hero_text_layout.addWidget(self.dashboard_kicker_label)
+        hero_text_layout.addWidget(self.dashboard_headline_label)
+        hero_text_layout.addWidget(self.dashboard_body_label)
+        hero_text_layout.addStretch()
+        hero_layout.addWidget(hero_text_container, 1)
+
+        command_card = CardWidget()
+        command_card.setObjectName("dashboardActionPanel")
+        command_card.setMinimumWidth(420)
+        command_card.setMaximumWidth(520)
+        command_card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        command_layout = QVBoxLayout(command_card)
+        command_layout.setContentsMargins(22, 20, 22, 20)
+        command_layout.setSpacing(14)
+
+        self.dashboard_command_title_label = StrongBodyLabel(tr("dashboard_command_title", "开始分析"))
+        self.dashboard_command_desc_label = CaptionLabel(
             tr("dashboard_command_desc", "选择数据文件后，系统会自动生成全网拓扑并激活分析功能。")
         )
+        self.dashboard_command_desc_label.setWordWrap(True)
+        command_layout.addWidget(self.dashboard_command_title_label)
+        command_layout.addWidget(self.dashboard_command_desc_label)
+
         command_bar = CommandBar()
         command_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.open_command_action = Action(FIF.FOLDER, tr("open_file", "打开数据文件"), self)
@@ -731,7 +1049,7 @@ class MainWindow(FluentWindow):
         self.export_command_button.setMenu(self.export_menu)
         command_bar.addWidget(self.export_command_button)
         command_bar.addAction(self.manual_command_action)
-        command_card.card_layout.addWidget(command_bar)
+        command_layout.addWidget(command_bar)
 
         file_layout = QHBoxLayout()
         file_layout.setSpacing(10)
@@ -743,32 +1061,70 @@ class MainWindow(FluentWindow):
         self.browse_btn = PushButton(tr("browse", "浏览..."))
         self.browse_btn.clicked.connect(self.browse_file)
         file_layout.addWidget(self.browse_btn)
-        command_card.card_layout.addLayout(file_layout)
+        command_layout.addLayout(file_layout)
 
-        layout.addWidget(command_card)
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(8)
+        self.dashboard_file_caption = CaptionLabel()
+        self.dashboard_file_caption.setObjectName("dashboardFileCaption")
+        self.dashboard_status_label = StrongBodyLabel(tr("dashboard_ready", "等待导入数据"))
+        self.dashboard_status_label.setObjectName("dashboardStatus")
+        self._refresh_dashboard_file_caption()
+        status_layout.addWidget(self.dashboard_file_caption)
+        status_layout.addStretch()
+        status_layout.addWidget(self.dashboard_status_label)
+        command_layout.addLayout(status_layout)
+
+        hero_layout.addWidget(command_card, 1)
+        layout.addWidget(hero_card)
+
+        metric_layout = QHBoxLayout()
+        metric_layout.setSpacing(14)
+        self._create_metric_card(
+            metric_layout, FIF.GLOBE,
+            "dashboard_metric_topology_title", "拓扑洞察",
+            "dashboard_metric_topology_desc", "自动生成全网拓扑，支持大图渲染策略。"
+        )
+        self._create_metric_card(
+            metric_layout, FIF.ROBOT,
+            "dashboard_metric_detection_title", "异常检测",
+            "dashboard_metric_detection_desc", "端口扫描、DDoS 和星型结构集中研判。"
+        )
+        self._create_metric_card(
+            metric_layout, FIF.SAVE,
+            "dashboard_metric_export_title", "结果导出",
+            "dashboard_metric_export_desc", "导出 CSV、JSON 与 HTML，便于复盘展示。"
+        )
+        layout.addLayout(metric_layout)
 
         quick_layout = QVBoxLayout()
-        quick_layout.setSpacing(12)
+        quick_layout.setSpacing(14)
         self._add_quick_card(
             quick_layout, FIF.GLOBE,
             tr("quick_topology_title", "拓扑总览"),
             tr("quick_topology_desc", "查看自动生成的网络拓扑，并调整大图渲染策略。"),
             tr("quick_open", "打开"),
-            self.topology_interface
+            self.topology_interface,
+            "quick_topology_title", "拓扑总览",
+            "quick_topology_desc", "查看自动生成的网络拓扑，并调整大图渲染策略。"
         )
         self._add_quick_card(
             quick_layout, FIF.ROBOT,
             tr("quick_anomaly_title", "异常研判"),
             tr("quick_anomaly_desc", "集中运行端口扫描、DDoS 和星型结构检测。"),
             tr("quick_open", "打开"),
-            self.anomaly_interface
+            self.anomaly_interface,
+            "quick_anomaly_title", "异常研判",
+            "quick_anomaly_desc", "集中运行端口扫描、DDoS 和星型结构检测。"
         )
         self._add_quick_card(
             quick_layout, FIF.DOCUMENT,
             tr("quick_results_title", "结果中心"),
             tr("quick_results_desc", "查看运行日志、表格输出和路径详情。"),
             tr("quick_open", "打开"),
-            self.results_interface
+            self.results_interface,
+            "quick_results_title", "结果中心",
+            "quick_results_desc", "查看运行日志、表格输出和路径详情。"
         )
         layout.addLayout(quick_layout)
         layout.addStretch()
@@ -854,6 +1210,7 @@ class MainWindow(FluentWindow):
             tr("settings_theme_title", "外观主题"),
             tr("settings_theme_desc", "手动切换浅色、深色，或跟随系统设置。")
         )
+        self.theme_card.setObjectName("settingsPrimaryCard")
         theme_layout = QHBoxLayout()
         theme_layout.setSpacing(10)
         self.theme_label = BodyLabel(tr("settings_theme_label", "主题:"))
@@ -873,6 +1230,7 @@ class MainWindow(FluentWindow):
             tr("settings_runtime_title", "运行参数"),
             tr("settings_runtime_desc", "调整后端分析任务使用的线程数量。")
         )
+        self.runtime_card.setObjectName("settingsSecondaryCard")
         runtime_layout = QHBoxLayout()
         runtime_layout.setSpacing(10)
         self.thread_label = BodyLabel(tr("thread_count", "线程数:"))
@@ -891,6 +1249,7 @@ class MainWindow(FluentWindow):
             tr("language", "语言 / Language"),
             tr("settings_language_desc", "语言切换会立即更新界面文本。")
         )
+        self.language_card.setObjectName("settingsSecondaryCard")
         lang_layout = QHBoxLayout()
         lang_layout.setSpacing(10)
         self.lang_zh_cn_btn = PushButton(tr("lang_zh_CN", "简体中文"))
@@ -910,6 +1269,7 @@ class MainWindow(FluentWindow):
             tr("help", "帮助"),
             tr("settings_help_desc", "查看用户手册或软件版本信息。")
         )
+        self.help_card.setObjectName("settingsSecondaryCard")
         help_layout = QHBoxLayout()
         self.manual_btn = PushButton(FIF.HELP, tr("help_manual", "用户手册"))
         self.about_btn = PushButton(FIF.INFO, tr("about", "关于"))
@@ -932,7 +1292,7 @@ class MainWindow(FluentWindow):
             setTheme(Theme.AUTO, save=True)
 
     def _apply_window_effects(self):
-        """Enable Win11 Mica while keeping qfluent popup composition stable."""
+        """Enable Win11 Mica while keeping popup composition patched separately."""
         is_win11 = sys.platform == "win32" and sys.getwindowsversion().build >= 22000
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, is_win11)
         self.setMicaEffectEnabled(is_win11)
@@ -1003,15 +1363,17 @@ class MainWindow(FluentWindow):
     def load_file(self, file_path):
         # 先退出任何可能的仅查看模式（但下面会根据文件类型重新设置）
         self.set_view_only_mode(False)
+        self._set_dashboard_current_file(file_path)
+        self._set_dashboard_status("dashboard_loading", "正在准备数据")
 
         # 检查文件是否为空
         if os.path.getsize(file_path) == 0:
-            QMessageBox.warning(
-                self,
+            self._show_warning_dialog(
                 tr("invalid_data", "数据无效"),
                 tr("empty_file", "选择的文件为空，无法加载！")
             )
             self.is_data_available = False
+            self._set_dashboard_status("dashboard_invalid", "数据不可用")
             return
 
         ext = os.path.splitext(file_path)[1].lower()
@@ -1023,7 +1385,7 @@ class MainWindow(FluentWindow):
 
             # 清除数据文件相关状态
             self.data_file = None
-            self.file_edit.clear()
+            self.file_edit.setText(file_path)
             self.log_text.clear()
             self.result_table.clear()
             self.result_table.setRowCount(0)
@@ -1050,17 +1412,18 @@ class MainWindow(FluentWindow):
                 self.update_export_actions()
 
             self.log_text.append(tr("visual_file_loaded", "已加载可视化文件: {}").format(file_path))
+            self._set_dashboard_status("dashboard_view_only", "当前为仅查看模式")
             return
 
         # ---------- 原有 CSV/PCAP 处理（分析模式） ----------
         if ext == '.csv':
             new_path = self._convert_to_utf8_if_needed(file_path)
             if not os.path.exists(new_path) or os.path.getsize(new_path) == 0:
-                QMessageBox.warning(
-                    self,
+                self._show_warning_dialog(
                     tr("invalid_data", "数据无效"),
                     tr("encoding_conversion_failed", "文件编码转换失败，无法加载！")
                 )
+                self._set_dashboard_status("dashboard_invalid", "数据不可用")
                 return
 
             # 判断当前 CSV 是否来自 PCAP 转换
@@ -1084,6 +1447,7 @@ class MainWindow(FluentWindow):
         self.is_data_available = False
         self.update_webview_theme(tr("analyzing_data", "正在分析数据，请稍候..."))
         self.log_text.append(tr("loaded_file", "已加载文件: {}").format(file_path))
+        self._set_dashboard_status("dashboard_loaded", "数据已就绪")
 
         if ext == '.pcap':
             self.convert_pcap(file_path)
@@ -1105,20 +1469,22 @@ class MainWindow(FluentWindow):
         self.pcap_worker.success.connect(on_pcap_converted)
         self.pcap_worker.error.connect(
             lambda e: [
-                QMessageBox.critical(
-                    self,
+                self._show_error_dialog(
                     tr("error", "错误"),
                     e
                 ),
-                setattr(self, 'is_data_available', False)
+                setattr(self, 'is_data_available', False),
+                self._set_dashboard_status("dashboard_invalid", "数据不可用")
             ]
         )
         self.pcap_worker.start()
 
     def export_pcap_csv(self):
         if not self.original_pcap_path or not self.converted_csv_path or not os.path.exists(self.converted_csv_path):
-            QMessageBox.warning(self, tr("export_error", "导出错误"),
-                                tr("no_pcap_converted_data", "没有可用的PCAP转换数据，请先加载PCAP文件并完成转换。"))
+            self._show_warning_dialog(
+                tr("export_error", "导出错误"),
+                tr("no_pcap_converted_data", "没有可用的PCAP转换数据，请先加载PCAP文件并完成转换。")
+            )
             return
         # 构建默认文件名
         base = os.path.splitext(os.path.basename(self.original_pcap_path))[0]
@@ -1132,11 +1498,15 @@ class MainWindow(FluentWindow):
         if save_path:
             try:
                 shutil.copy2(self.converted_csv_path, save_path)
-                QMessageBox.information(self, tr("export_success", "导出成功"),
-                                        tr("file_saved_to", "文件已保存到: {}").format(save_path))
+                self._show_success_dialog(
+                    tr("export_success", "导出成功"),
+                    tr("file_saved_to", "文件已保存到: {}").format(save_path)
+                )
             except Exception as e:
-                QMessageBox.critical(self, tr("export_error", "导出错误"),
-                                     tr("save_failed", "保存失败: {}").format(e))
+                self._show_error_dialog(
+                    tr("export_error", "导出错误"),
+                    tr("save_failed", "保存失败: {}").format(e)
+                )
 
     def export_graph(self, which, fmt):
         if which == "full":
@@ -1152,8 +1522,10 @@ class MainWindow(FluentWindow):
 
         src_path = json_path if fmt == "json" else html_path
         if not src_path or not os.path.exists(src_path):
-            QMessageBox.warning(self, tr("export_error", "导出错误"),
-                                tr("file_not_available", "要导出的文件不可用，请先生成对应图。"))
+            self._show_warning_dialog(
+                tr("export_error", "导出错误"),
+                tr("file_not_available", "要导出的文件不可用，请先生成对应图。")
+            )
             return
 
         ext = "." + fmt
@@ -1167,11 +1539,15 @@ class MainWindow(FluentWindow):
         if save_path:
             try:
                 shutil.copy2(src_path, save_path)
-                QMessageBox.information(self, tr("export_success", "导出成功"),
-                                        tr("file_saved_to", "文件已保存到: {}").format(save_path))
+                self._show_success_dialog(
+                    tr("export_success", "导出成功"),
+                    tr("file_saved_to", "文件已保存到: {}").format(save_path)
+                )
             except Exception as e:
-                QMessageBox.critical(self, tr("export_error", "导出错误"),
-                                     tr("save_failed", "保存失败: {}").format(e))
+                self._show_error_dialog(
+                    tr("export_error", "导出错误"),
+                    tr("save_failed", "保存失败: {}").format(e)
+                )
 
     def show_full_graph(self):
         json_path = self.temp_manager.get_path("full_graph.json")
@@ -1317,6 +1693,13 @@ class MainWindow(FluentWindow):
         surface_color = "#2b2b2b" if dark else "#ffffff"
         card_color = "#323232" if dark else "#f7f9fc"
         border_color = "#4a4a4a" if dark else "#d8dce5"
+        nav_bg = "#171717" if dark else "#f3ede6"
+        nav_hover = "#2a2a2a" if dark else "#e7dfd6"
+        nav_pressed = "#343434" if dark else "#ddd3c8"
+        nav_selected = "#2d2d2d" if dark else "#e5ded6"
+        hero_bg = "#252525" if dark else "#fbf7f1"
+        panel_bg = "#2d2d2d" if dark else "#fffdfb"
+        subtle_text = "#c7c7c7" if dark else "#5f6b7a"
         header_bg = "#3a3a3a" if dark else "#eef3fb"
         alt_bg = "#303030" if dark else "#f8fbff"
         hover_bg = "#3d3d3d" if dark else "#eef6ff"
@@ -1351,10 +1734,73 @@ class MainWindow(FluentWindow):
                 background-color: {page_bg};
                 color: {text_color};
             }}
+            NavigationInterface,
+            NavigationPanel {{
+                background-color: {nav_bg};
+                border-right: 1px solid {border_color};
+            }}
+            NavigationWidget {{
+                background-color: transparent;
+                border-radius: 8px;
+                margin: 2px 8px;
+                padding-left: 8px;
+                color: {text_color};
+            }}
+            NavigationWidget:hover {{
+                background-color: {nav_hover};
+            }}
+            NavigationWidget:pressed {{
+                background-color: {nav_pressed};
+            }}
+            NavigationWidget[isSelected=true] {{
+                background-color: {nav_selected};
+                font-weight: 600;
+            }}
+            CardWidget#dashboardHeroCard {{
+                background-color: {hero_bg};
+                border: 1px solid {border_color};
+                border-radius: 10px;
+            }}
+            CardWidget#dashboardActionPanel {{
+                background-color: {panel_bg};
+                border: 1px solid {border_color};
+                border-radius: 10px;
+            }}
+            CardWidget#dashboardMetricCard,
+            CardWidget#dashboardQuickCard {{
+                background-color: {surface_color};
+                border: 1px solid {border_color};
+                border-radius: 10px;
+            }}
+            CardWidget#settingsPrimaryCard {{
+                background-color: {panel_bg};
+                border: 1px solid {border_color};
+                border-radius: 10px;
+            }}
+            CardWidget#settingsSecondaryCard {{
+                background-color: {surface_color};
+                border: 1px solid {border_color};
+                border-radius: 10px;
+            }}
             CardWidget {{
                 background-color: {surface_color};
                 border: 1px solid {border_color};
                 border-radius: 8px;
+            }}
+            QLabel#dashboardKicker {{
+                color: {accent};
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0;
+            }}
+            QLabel#dashboardBody,
+            QLabel#dashboardFileCaption {{
+                color: {subtle_text};
+            }}
+            QLabel#dashboardStatus {{
+                color: {accent};
+                font-size: 14px;
+                font-weight: 600;
             }}
             CommandBar QToolButton {{
                 background-color: {card_color};
@@ -1366,6 +1812,11 @@ class MainWindow(FluentWindow):
             CommandBar QToolButton:hover {{
                 background-color: {hover_bg};
                 border-color: {accent};
+            }}
+            PopUpAniStackedWidget CardWidget {{
+                background-color: {surface_color};
+                border: 1px solid {border_color};
+                border-radius: 10px;
             }}
             QGroupBox {{
                 background-color: {card_color};
@@ -1511,8 +1962,10 @@ class MainWindow(FluentWindow):
         src = self.path_tab.path_src_edit.text().strip()
         dst = self.path_tab.path_dst_edit.text().strip()
         if not src or not dst:
-            QMessageBox.warning(self, tr("path_search_warning_title", "警告"),
-                                tr("path_search_need_src_dst", "请输入源IP和目的IP"))
+            self._show_warning_dialog(
+                tr("path_search_warning_title", "警告"),
+                tr("path_search_need_src_dst", "请输入源IP和目的IP")
+            )
             return
         if self.path_tab.compare_checkbox.isChecked():
             base_cmd = self._core_command("compare-paths", "--src", src, "--dst", dst)
@@ -1541,8 +1994,10 @@ class MainWindow(FluentWindow):
                 min_traffic = self._scaled_bytes(min_traffic_str, tab.min_traffic_unit.currentIndex())
                 args += ["--min-traffic", str(min_traffic)]
             except ValueError:
-                QMessageBox.warning(self, tr("port_scan_warning_title", "警告"),
-                                    tr("port_scan_min_traffic_int", "最小总流量必须为整数"))
+                self._show_warning_dialog(
+                    tr("port_scan_warning_title", "警告"),
+                    tr("port_scan_min_traffic_int", "最小总流量必须为整数")
+                )
                 return
         self._execute_task("port-scan", *args, generate_graph=True, graph_name="port_scan")
 
@@ -1561,8 +2016,10 @@ class MainWindow(FluentWindow):
                 val = self._scaled_bytes(traffic_str, self.anomaly_tab.ddos_tab.traffic_unit.currentIndex())
                 base_cmd += ["--in-data-threshold", str(val)]
             except ValueError:
-                QMessageBox.warning(self, tr("ddos_warning_title", "警告"),
-                                    tr("ddos_traffic_must_be_int", "入流量阈值必须为整数"))
+                self._show_warning_dialog(
+                    tr("ddos_warning_title", "警告"),
+                    tr("ddos_traffic_must_be_int", "入流量阈值必须为整数")
+                )
                 return
         self.task_handler.execute_command(base_cmd, task_type="ddos-target", generate_graph=True, graph_name="ddos")
 
@@ -1577,8 +2034,10 @@ class MainWindow(FluentWindow):
             return
         ip = self.subgraph_tab.ip_edit.text().strip()
         if not ip:
-            QMessageBox.warning(self, tr("subgraph_warning_title", "警告"),
-                                tr("subgraph_need_target_ip", "请输入目标IP"))
+            self._show_warning_dialog(
+                tr("subgraph_warning_title", "警告"),
+                tr("subgraph_need_target_ip", "请输入目标IP")
+            )
             return
         self.log_text.append(tr("subgraph_generating", "正在生成以 {} 为中心的子图...").format(ip))
         self._execute_task("subgraph", "--target", ip, generate_graph=True, graph_name="subgraph")
@@ -1589,8 +2048,10 @@ class MainWindow(FluentWindow):
         tab = self.custom_rule_tab
         rule_target = tab.target_ip_edit.text().strip()
         if not rule_target:
-            QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                tr("custom_rule_need_target_ip", "请输入目标IP"))
+            self._show_warning_dialog(
+                tr("custom_rule_warning_title", "警告"),
+                tr("custom_rule_need_target_ip", "请输入目标IP")
+            )
             return
 
         base_cmd = self._core_command("custom-rule", "--rule-target", rule_target)
@@ -1601,13 +2062,17 @@ class MainWindow(FluentWindow):
             try:
                 protocol_val = int(protocol_str)
                 if protocol_val < 0 or protocol_val > 255:
-                    QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                        tr("custom_rule_protocol_range", "协议类型必须是0-255之间的整数"))
+                    self._show_warning_dialog(
+                        tr("custom_rule_warning_title", "警告"),
+                        tr("custom_rule_protocol_range", "协议类型必须是0-255之间的整数")
+                    )
                     return
                 base_cmd += ["--rule-protocol", str(protocol_val)]
             except ValueError:
-                QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                    tr("custom_rule_protocol_int", "协议类型必须为整数"))
+                self._show_warning_dialog(
+                    tr("custom_rule_warning_title", "警告"),
+                    tr("custom_rule_protocol_int", "协议类型必须为整数")
+                )
                 return
 
         # 规则类型
@@ -1618,16 +2083,20 @@ class MainWindow(FluentWindow):
         if tab.radio_cidr.isChecked():
             cidr = tab.cidr_edit.text().strip()
             if not cidr:
-                QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                    tr("custom_rule_need_cidr", "请输入CIDR范围"))
+                self._show_warning_dialog(
+                    tr("custom_rule_warning_title", "警告"),
+                    tr("custom_rule_need_cidr", "请输入CIDR范围")
+                )
                 return
             base_cmd += ["--range-cidr", cidr]
         else:
             start = tab.start_ip_edit.text().strip()
             end = tab.end_ip_edit.text().strip()
             if not start or not end:
-                QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                    tr("custom_rule_need_start_end", "请输入起始IP和结束IP"))
+                self._show_warning_dialog(
+                    tr("custom_rule_warning_title", "警告"),
+                    tr("custom_rule_need_start_end", "请输入起始IP和结束IP")
+                )
                 return
             base_cmd += ["--range-start", start, "--range-end", end]
 
@@ -1638,8 +2107,10 @@ class MainWindow(FluentWindow):
                 int(src_port)
                 base_cmd += ["--rule-src-port", src_port]
             except ValueError:
-                QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                    tr("custom_rule_src_port_int", "源端口必须为整数"))
+                self._show_warning_dialog(
+                    tr("custom_rule_warning_title", "警告"),
+                    tr("custom_rule_src_port_int", "源端口必须为整数")
+                )
                 return
 
         # 目的端口
@@ -1649,8 +2120,10 @@ class MainWindow(FluentWindow):
                 int(dst_port)
                 base_cmd += ["--rule-dst-port", dst_port]
             except ValueError:
-                QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                    tr("custom_rule_dst_port_int", "目的端口必须为整数"))
+                self._show_warning_dialog(
+                    tr("custom_rule_warning_title", "警告"),
+                    tr("custom_rule_dst_port_int", "目的端口必须为整数")
+                )
                 return
 
         # 最大流量阈值
@@ -1660,8 +2133,10 @@ class MainWindow(FluentWindow):
                 val = self._scaled_bytes(max_traffic_str, tab.max_traffic_unit.currentIndex())
                 base_cmd += ["--rule-max-traffic", str(val)]
             except ValueError:
-                QMessageBox.warning(self, tr("custom_rule_warning_title", "警告"),
-                                    tr("custom_rule_max_traffic_int", "最大流量阈值必须为整数"))
+                self._show_warning_dialog(
+                    tr("custom_rule_warning_title", "警告"),
+                    tr("custom_rule_max_traffic_int", "最大流量阈值必须为整数")
+                )
                 return
 
         self.task_handler.execute_command(base_cmd, task_type="custom-rule", generate_graph=True,
@@ -1669,24 +2144,33 @@ class MainWindow(FluentWindow):
 
     def is_data_valid(self):
         if self.view_only_mode:
-            QMessageBox.warning(self, tr("invalid_data", "数据无效"),
-                                tr("view_only_mode_no_analysis", "当前处于可视化查看模式，无法进行分析操作。"))
+            self._show_warning_dialog(
+                tr("invalid_data", "数据无效"),
+                tr("view_only_mode_no_analysis", "当前处于可视化查看模式，无法进行分析操作。")
+            )
             return False
 
         # 原有检查（数据文件存在、大小、有效性等）
         if not self.data_file or not os.path.exists(self.data_file):
-            QMessageBox.warning(self, tr("invalid_data", "数据无效"),
-                                tr("data_not_loaded", "未加载任何数据文件，请先加载有效数据！"))
+            self._show_warning_dialog(
+                tr("invalid_data", "数据无效"),
+                tr("data_not_loaded", "未加载任何数据文件，请先加载有效数据！")
+            )
             return False
 
         if os.path.getsize(self.data_file) == 0:
-            QMessageBox.warning(self, tr("invalid_data", "数据无效"), tr("empty_file", "加载的文件为空，请重试！"))
+            self._show_warning_dialog(
+                tr("invalid_data", "数据无效"),
+                tr("empty_file", "加载的文件为空，请重试！")
+            )
             self.is_data_available = False
             return False
 
         if not self.is_data_available:
-            QMessageBox.warning(self, tr("invalid_data", "数据无效"),
-                                tr("no_valid_network_data", "加载的文件无有效网络流量数据，请重试！"))
+            self._show_warning_dialog(
+                tr("invalid_data", "数据无效"),
+                tr("no_valid_network_data", "加载的文件无有效网络流量数据，请重试！")
+            )
             return False
 
         return True
@@ -1720,13 +2204,15 @@ class MainWindow(FluentWindow):
             with open(manual_path, 'r', encoding='utf-8') as f:
                 html_content = f.read()
         except Exception as e:
-            QMessageBox.warning(self, tr("error", "错误"),
-                                tr("manual_load_failed", "无法加载用户手册: {}").format(e))
+            self._show_error_dialog(
+                tr("error", "错误"),
+                tr("manual_load_failed", "无法加载用户手册: {}").format(e)
+            )
             return
 
         # 获取当前主题颜色并生成适配样式
         bg_color, text_color = get_theme_colors()
-        is_dark = (bg_color == "#222222")
+        is_dark = isDarkTheme()
         style = _generate_manual_theme_style(is_dark)
 
         # 将样式注入到 HTML 的 <head> 中
@@ -1739,6 +2225,9 @@ class MainWindow(FluentWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle(tr("manual_title", "用户手册"))
         dialog.resize(900, 700)
+        dialog.setStyleSheet(
+            f"background-color: {'#1f1f1f' if is_dark else '#f5f7fb'}; color: {text_color};"
+        )
         layout = QVBoxLayout(dialog)
         web_view = QWebEngineView()
         web_view.setHtml(html_content)
