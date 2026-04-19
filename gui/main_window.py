@@ -253,6 +253,7 @@ class MainWindow(FluentWindow):
         self.init_ui()
         self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
         QApplication.instance().paletteChanged.connect(self.on_palette_changed)
+        qconfig.themeChangedFinished.connect(self._refresh_theme_visuals)
         lang_mgr.language_changed.connect(self.retranslate_ui)
 
     def showEvent(self, event):
@@ -260,6 +261,7 @@ class MainWindow(FluentWindow):
         if not self._centered_on_first_show:
             self._centered_on_first_show = True
             QTimer.singleShot(0, self.center_on_screen)
+        QTimer.singleShot(0, self._refresh_theme_visuals)
 
     def center_on_screen(self):
         """Place the window at the center of the active screen on first launch."""
@@ -618,6 +620,16 @@ class MainWindow(FluentWindow):
         for label, icon in self.quick_card_icons:
             label.setPixmap(icon.icon(theme=theme).pixmap(30, 30))
 
+    def _refresh_theme_visuals(self):
+        self._apply_window_effects()
+        self.update_webview_theme()
+        self.update_log_detail_theme()
+        self._refresh_quick_card_icons()
+        if hasattr(self, "titleBar") and self.titleBar is not None:
+            self.titleBar.update()
+            self.titleBar.repaint()
+        self.update()
+
     def _build_fluent_pages(self):
         self.workbench_interface = self._create_page(
             "dashboard",
@@ -702,6 +714,7 @@ class MainWindow(FluentWindow):
         self.navigationInterface.setExpandWidth(228)
         self.navigationInterface.setMinimumExpandWidth(180)
         self.navigationInterface.expand(useAni=False)
+        self._refresh_quick_card_icons()
 
     def _build_dashboard_page(self):
         layout = self.workbench_interface.page_layout
@@ -920,13 +933,6 @@ class MainWindow(FluentWindow):
             setTheme(Theme.LIGHT, save=True)
         else:
             setTheme(Theme.AUTO, save=True)
-        self._apply_window_effects()
-        self.update_webview_theme()
-        self.update_log_detail_theme()
-        self._refresh_quick_card_icons()
-        QApplication.style().unpolish(self)
-        QApplication.style().polish(self)
-        self.update()
 
     def _apply_window_effects(self):
         """Enable Win11 Mica while keeping qfluent popup composition stable."""
