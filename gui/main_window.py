@@ -194,6 +194,7 @@ class MainWindow(FluentWindow):
         self.setFont(QFont("Microsoft YaHei UI", 10))
         self.workbench_interface = None
         self.web_view = None
+        self._centered_on_first_show = False
         self.setWindowTitle(tr("app_title", "网络流量分析与异常检测系统"))
         self.resize(1280, 800)
 
@@ -228,6 +229,28 @@ class MainWindow(FluentWindow):
         self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
         QApplication.instance().paletteChanged.connect(self.on_palette_changed)
         lang_mgr.language_changed.connect(self.retranslate_ui)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._centered_on_first_show:
+            self._centered_on_first_show = True
+            QTimer.singleShot(0, self.center_on_screen)
+
+    def center_on_screen(self):
+        """Place the window at the center of the active screen on first launch."""
+        screen = self.windowHandle().screen() if self.windowHandle() else QApplication.primaryScreen()
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+
+        available_geometry = screen.availableGeometry()
+        frame_geometry = self.frameGeometry()
+        if frame_geometry.width() <= 0 or frame_geometry.height() <= 0:
+            frame_geometry = QRect(QPoint(0, 0), self.size())
+
+        frame_geometry.moveCenter(available_geometry.center())
+        self.move(frame_geometry.topLeft())
 
     def set_view_only_mode(self, enabled: bool):
         """设置只读模式，启用/禁用所有功能按钮和输入控件"""
