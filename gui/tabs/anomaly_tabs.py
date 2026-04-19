@@ -171,6 +171,8 @@ class AnomalyTab(QWidget):
         layout.setSpacing(10)
 
         self.pivot = Pivot()
+        self.pivot.setItemFontSize(15)
+        self.pivot.setContentsMargins(0, 2, 0, 6)
         self.stack_widget = QStackedWidget()
         self.port_scan_tab = PortScanTab()
         self.ddos_tab = DDosTab()
