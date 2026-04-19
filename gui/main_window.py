@@ -186,6 +186,28 @@ def _generate_manual_theme_style(is_dark: bool) -> str:
         """
 
 
+def _patch_fluent_popup_composition():
+    """Make qfluentwidgets popup menus stable on Windows setups with broken alpha composition."""
+    if getattr(RoundMenu, "_network_analyzer_popup_patch", False):
+        return
+
+    original_init = RoundMenu.__init__
+
+    def stable_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        if hasattr(self, "hBoxLayout"):
+            self.hBoxLayout.setContentsMargins(0, 0, 0, 0)
+        if hasattr(self, "view"):
+            self.view.setGraphicsEffect(None)
+
+    RoundMenu.__init__ = stable_init
+    RoundMenu._network_analyzer_popup_patch = True
+
+
+_patch_fluent_popup_composition()
+
+
 class MainWindow(FluentWindow):
     def __init__(self):
         qconfig.set(qconfig.fontFamilies, ["Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Segoe UI"])
@@ -306,8 +328,10 @@ class MainWindow(FluentWindow):
         self.open_action.setText(tr("open_file", "打开数据文件"))
         self.export_menu.setTitle(tr("export_menu", "导出"))
         self.export_pcap_csv_action.setText(tr("export_pcap_csv", "PCAP转换的CSV"))
-        self.full_graph_menu.setTitle(tr("task_full_graph", "全网拓扑"))
-        self.subgraph_menu.setTitle(tr("export_current_subgraph", "当前子图"))
+        self.export_full_graph_json_action.setText(tr("export_full_graph_json", "全网拓扑 JSON"))
+        self.export_full_graph_html_action.setText(tr("export_full_graph_html", "全网拓扑 HTML"))
+        self.export_subgraph_json_action.setText(tr("export_subgraph_json", "当前子图 JSON"))
+        self.export_subgraph_html_action.setText(tr("export_subgraph_html", "当前子图 HTML"))
         self.settings_menu.setTitle(tr("settings", "设置"))
         self.lang_menu.setTitle(tr("language", "语言 / Language"))
         self.action_zh_cn.setText(tr("lang_zh_CN", "简体中文"))
@@ -396,29 +420,25 @@ class MainWindow(FluentWindow):
         self.export_menu = RoundMenu(tr("export_menu", "导出"), self)
         self.file_menu.addMenu(self.export_menu)
 
-        self.export_pcap_csv_action = QAction(tr("export_pcap_csv", "PCAP转换的CSV"), self)
+        self.export_pcap_csv_action = Action(FIF.SAVE, tr("export_pcap_csv", "PCAP转换的CSV"), self)
         self.export_pcap_csv_action.triggered.connect(self.export_pcap_csv)
         self.export_menu.addAction(self.export_pcap_csv_action)
 
-        self.full_graph_menu = RoundMenu(tr("task_full_graph", "全网拓扑"), self)
-        self.full_graph_menu.setIcon(FIF.GLOBE)
-        self.export_full_graph_json_action = QAction("JSON", self)
+        self.export_menu.addSeparator()
+        self.export_full_graph_json_action = Action(FIF.GLOBE, tr("export_full_graph_json", "全网拓扑 JSON"), self)
         self.export_full_graph_json_action.triggered.connect(lambda: self.export_graph("full", "json"))
-        self.full_graph_menu.addAction(self.export_full_graph_json_action)
-        self.export_full_graph_html_action = QAction("HTML", self)
+        self.export_menu.addAction(self.export_full_graph_json_action)
+        self.export_full_graph_html_action = Action(FIF.GLOBE, tr("export_full_graph_html", "全网拓扑 HTML"), self)
         self.export_full_graph_html_action.triggered.connect(lambda: self.export_graph("full", "html"))
-        self.full_graph_menu.addAction(self.export_full_graph_html_action)
-        self.export_menu.addMenu(self.full_graph_menu)
+        self.export_menu.addAction(self.export_full_graph_html_action)
 
-        self.subgraph_menu = RoundMenu(tr("export_current_subgraph", "当前子图"), self)
-        self.subgraph_menu.setIcon(FIF.SHARE)
-        self.export_subgraph_json_action = QAction("JSON", self)
+        self.export_menu.addSeparator()
+        self.export_subgraph_json_action = Action(FIF.SHARE, tr("export_subgraph_json", "当前子图 JSON"), self)
         self.export_subgraph_json_action.triggered.connect(lambda: self.export_graph("current", "json"))
-        self.subgraph_menu.addAction(self.export_subgraph_json_action)
-        self.export_subgraph_html_action = QAction("HTML", self)
+        self.export_menu.addAction(self.export_subgraph_json_action)
+        self.export_subgraph_html_action = Action(FIF.SHARE, tr("export_subgraph_html", "当前子图 HTML"), self)
         self.export_subgraph_html_action.triggered.connect(lambda: self.export_graph("current", "html"))
-        self.subgraph_menu.addAction(self.export_subgraph_html_action)
-        self.export_menu.addMenu(self.subgraph_menu)
+        self.export_menu.addAction(self.export_subgraph_html_action)
 
         # 初始时禁用所有导出动作，直到数据加载
         self.update_export_actions()
