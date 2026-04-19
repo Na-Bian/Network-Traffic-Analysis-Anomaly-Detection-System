@@ -869,12 +869,10 @@ class MainWindow(FluentWindow):
         self.update()
 
     def _apply_window_effects(self):
-        """Enable Win11 shell effects while keeping a solid fallback on older systems."""
+        """Keep the window composition stable across Windows/Qt combinations."""
         is_win11 = sys.platform == "win32" and sys.getwindowsversion().build >= 22000
-        # Do not enable WA_TranslucentBackground here. It breaks qfluentwidgets popup
-        # layers (ComboBox/RoundMenu) on some Windows + QtWebEngine combinations.
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
-        self.setMicaEffectEnabled(is_win11)
+        self.setMicaEffectEnabled(False)
 
         if not is_win11:
             return
@@ -1251,10 +1249,10 @@ class MainWindow(FluentWindow):
         dark = isDarkTheme()
         mica_enabled = self.isMicaEffectEnabled()
         window_bg = "transparent" if mica_enabled else bg_color
-        page_bg = "rgba(32, 32, 32, 178)" if dark else "rgba(245, 247, 251, 190)"
+        page_bg = "#202020" if dark else "#f5f7fb"
         scroll_bg = "transparent" if mica_enabled else bg_color
-        surface_color = "rgba(43, 43, 43, 232)" if dark else "rgba(255, 255, 255, 235)"
-        card_color = "rgba(50, 50, 50, 225)" if dark else "rgba(247, 249, 252, 230)"
+        surface_color = "#2b2b2b" if dark else "#ffffff"
+        card_color = "#323232" if dark else "#f7f9fc"
         border_color = "#4a4a4a" if dark else "#d8dce5"
         header_bg = "#3a3a3a" if dark else "#eef3fb"
         alt_bg = "#303030" if dark else "#f8fbff"
