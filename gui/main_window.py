@@ -243,6 +243,8 @@ class MainWindow(FluentWindow):
         self.export_full_graph_html_action = None
         self.export_subgraph_json_action = None
         self.export_subgraph_html_action = None
+        self.full_graph_menu = None
+        self.subgraph_menu = None
         self.export_command_button = None
 
         self.task_handler = TaskHandler(self)  # 任务处理器
@@ -328,10 +330,12 @@ class MainWindow(FluentWindow):
         self.open_action.setText(tr("open_file", "打开数据文件"))
         self.export_menu.setTitle(tr("export_menu", "导出"))
         self.export_pcap_csv_action.setText(tr("export_pcap_csv", "PCAP转换的CSV"))
-        self.export_full_graph_json_action.setText(tr("export_full_graph_json", "全网拓扑 JSON"))
-        self.export_full_graph_html_action.setText(tr("export_full_graph_html", "全网拓扑 HTML"))
-        self.export_subgraph_json_action.setText(tr("export_subgraph_json", "当前子图 JSON"))
-        self.export_subgraph_html_action.setText(tr("export_subgraph_html", "当前子图 HTML"))
+        self.full_graph_menu.setTitle(tr("task_full_graph", "全网拓扑"))
+        self.subgraph_menu.setTitle(tr("export_current_subgraph", "当前子图"))
+        self.export_full_graph_json_action.setText("JSON")
+        self.export_full_graph_html_action.setText("HTML")
+        self.export_subgraph_json_action.setText("JSON")
+        self.export_subgraph_html_action.setText("HTML")
         self.settings_menu.setTitle(tr("settings", "设置"))
         self.lang_menu.setTitle(tr("language", "语言 / Language"))
         self.action_zh_cn.setText(tr("lang_zh_CN", "简体中文"))
@@ -424,21 +428,25 @@ class MainWindow(FluentWindow):
         self.export_pcap_csv_action.triggered.connect(self.export_pcap_csv)
         self.export_menu.addAction(self.export_pcap_csv_action)
 
-        self.export_menu.addSeparator()
-        self.export_full_graph_json_action = Action(FIF.GLOBE, tr("export_full_graph_json", "全网拓扑 JSON"), self)
+        self.full_graph_menu = RoundMenu(tr("task_full_graph", "全网拓扑"), self)
+        self.full_graph_menu.setIcon(FIF.GLOBE)
+        self.export_full_graph_json_action = Action("JSON", self)
         self.export_full_graph_json_action.triggered.connect(lambda: self.export_graph("full", "json"))
-        self.export_menu.addAction(self.export_full_graph_json_action)
-        self.export_full_graph_html_action = Action(FIF.GLOBE, tr("export_full_graph_html", "全网拓扑 HTML"), self)
+        self.full_graph_menu.addAction(self.export_full_graph_json_action)
+        self.export_full_graph_html_action = Action("HTML", self)
         self.export_full_graph_html_action.triggered.connect(lambda: self.export_graph("full", "html"))
-        self.export_menu.addAction(self.export_full_graph_html_action)
+        self.full_graph_menu.addAction(self.export_full_graph_html_action)
+        self.export_menu.addMenu(self.full_graph_menu)
 
-        self.export_menu.addSeparator()
-        self.export_subgraph_json_action = Action(FIF.SHARE, tr("export_subgraph_json", "当前子图 JSON"), self)
+        self.subgraph_menu = RoundMenu(tr("export_current_subgraph", "当前子图"), self)
+        self.subgraph_menu.setIcon(FIF.SHARE)
+        self.export_subgraph_json_action = Action("JSON", self)
         self.export_subgraph_json_action.triggered.connect(lambda: self.export_graph("current", "json"))
-        self.export_menu.addAction(self.export_subgraph_json_action)
-        self.export_subgraph_html_action = Action(FIF.SHARE, tr("export_subgraph_html", "当前子图 HTML"), self)
+        self.subgraph_menu.addAction(self.export_subgraph_json_action)
+        self.export_subgraph_html_action = Action("HTML", self)
         self.export_subgraph_html_action.triggered.connect(lambda: self.export_graph("current", "html"))
-        self.export_menu.addAction(self.export_subgraph_html_action)
+        self.subgraph_menu.addAction(self.export_subgraph_html_action)
+        self.export_menu.addMenu(self.subgraph_menu)
 
         # 初始时禁用所有导出动作，直到数据加载
         self.update_export_actions()
@@ -889,10 +897,10 @@ class MainWindow(FluentWindow):
         self.update()
 
     def _apply_window_effects(self):
-        """Keep the window composition stable across Windows/Qt combinations."""
+        """Enable Win11 Mica while keeping qfluent popup composition stable."""
         is_win11 = sys.platform == "win32" and sys.getwindowsversion().build >= 22000
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
-        self.setMicaEffectEnabled(False)
+        self.setMicaEffectEnabled(is_win11)
 
         if not is_win11:
             return
