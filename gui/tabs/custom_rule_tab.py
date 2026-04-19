@@ -1,23 +1,20 @@
 # gui/tabs/custom_rule_tab.py
-from PyQt6.QtCore import Qt
 from PyQt6.QtCore import QSignalBlocker
-from PyQt6.QtWidgets import QScrollArea, QWidget, QGridLayout, QGroupBox, QVBoxLayout, QHBoxLayout, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QHBoxLayout, QSizePolicy
 from qfluentwidgets import BodyLabel, ComboBox, LineEdit, PrimaryPushButton, RadioButton
 
 from ..translator import tr
 
 
-class CustomRuleTab(QScrollArea):
+class CustomRuleTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setObjectName("customRuleContent")
 
-        content = QWidget()
-        layout = QGridLayout(content)
-        layout.setContentsMargins(3, 3, 3, 3)
-        layout.setSpacing(3)
+        layout = QGridLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setHorizontalSpacing(14)
+        layout.setVerticalSpacing(12)
 
         # 目标IP (行0)
         self.target_ip_label = BodyLabel()
@@ -29,8 +26,8 @@ class CustomRuleTab(QScrollArea):
         # IP范围组 (行1)
         self.range_group = QGroupBox()
         range_layout = QVBoxLayout(self.range_group)
-        range_layout.setContentsMargins(3, 3, 3, 3)
-        range_layout.setSpacing(2)
+        range_layout.setContentsMargins(18, 18, 18, 18)
+        range_layout.setSpacing(10)
 
         self.radio_cidr = RadioButton()
         self.radio_cidr.setChecked(True)
@@ -63,8 +60,9 @@ class CustomRuleTab(QScrollArea):
         # 可选参数组 (行2)
         self.optional_group = QGroupBox()
         optional_layout = QGridLayout(self.optional_group)
-        optional_layout.setContentsMargins(3, 3, 3, 3)
-        optional_layout.setSpacing(2)
+        optional_layout.setContentsMargins(18, 18, 18, 18)
+        optional_layout.setHorizontalSpacing(14)
+        optional_layout.setVerticalSpacing(10)
 
         # 协议类型
         self.protocol_label = BodyLabel()
@@ -120,7 +118,6 @@ class CustomRuleTab(QScrollArea):
         layout.addWidget(self.detect_btn, 5, 0, 1, 3)
 
         layout.setColumnStretch(1, 1)
-        self.setWidget(content)
         self.retranslate_ui()
 
     def on_range_toggled(self):

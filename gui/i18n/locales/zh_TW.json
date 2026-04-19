@@ -20,6 +20,8 @@
   "settings_theme_auto": "跟隨系統",
   "settings_theme_light": "淺色",
   "settings_theme_dark": "深色",
+  "settings_runtime_title": "執行參數",
+  "settings_runtime_desc": "調整後端分析任務使用的執行緒數量。",
   "dashboard_command_title": "開始分析",
   "dashboard_command_desc": "選擇資料檔案後，系統會自動生成全網拓撲並啟用分析功能。",
   "quick_topology_title": "拓撲總覽",

@@ -20,6 +20,8 @@
   "settings_theme_auto": "Use System Setting",
   "settings_theme_light": "Light",
   "settings_theme_dark": "Dark",
+  "settings_runtime_title": "Runtime",
+  "settings_runtime_desc": "Adjust the thread count used by backend analysis tasks.",
   "dashboard_command_title": "Start Analysis",
   "dashboard_command_desc": "After selecting a data file, the system generates the full topology and enables analysis tools.",
   "quick_topology_title": "Topology Overview",

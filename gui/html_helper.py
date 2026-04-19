@@ -3,20 +3,16 @@ import os
 import re
 
 from PyQt6.QtCore import QUrl
-from PyQt6.QtGui import QPalette
-from PyQt6.QtWidgets import QApplication
+from qfluentwidgets import isDarkTheme
 
 from .utils import resource_path
 
 
 def get_theme_colors():
-    """获取当前系统主题的背景色和文字颜色"""
-    palette = QApplication.palette()
-    window_color = palette.color(QPalette.ColorRole.Window)
-    brightness = (window_color.red() * 299 + window_color.green() * 587 + window_color.blue() * 114) / 1000
-    is_dark = brightness < 128
-    bg_color = "#222222" if is_dark else "#ffffff"
-    text_color = "white" if is_dark else "black"
+    """Return colors from qfluentwidgets' active theme, not the stale Qt palette."""
+    is_dark = isDarkTheme()
+    bg_color = "#202020" if is_dark else "#f5f7fb"
+    text_color = "#f5f5f5" if is_dark else "#1f1f1f"
     return bg_color, text_color
 
 

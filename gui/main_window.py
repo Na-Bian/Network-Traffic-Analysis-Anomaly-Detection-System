@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import sys
 
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
@@ -18,6 +19,7 @@ from qfluentwidgets import (
     ComboBox as FluentComboBox,
     FluentIcon as FIF,
     FluentWindow,
+    DropDownPushButton,
     HeaderCardWidget,
     LineEdit as FluentLineEdit,
     MessageBox,
@@ -217,6 +219,7 @@ class MainWindow(FluentWindow):
         self.export_full_graph_html_action = None
         self.export_subgraph_json_action = None
         self.export_subgraph_html_action = None
+        self.export_command_button = None
 
         self.task_handler = TaskHandler(self)  # 任务处理器
 
@@ -290,7 +293,7 @@ class MainWindow(FluentWindow):
         self.manual_action.setText(tr("help_manual", "用户手册"))
         self.about_action.setText(tr("about", "关于"))
         self.open_command_action.setText(tr("open_file", "打开数据文件"))
-        self.export_command_action.setText(tr("export_menu", "导出"))
+        self.export_command_button.setText(tr("export_menu", "导出"))
         self.manual_command_action.setText(tr("help_manual", "用户手册"))
         self.thread_label.setText(tr("thread_count", "线程数:"))
         self.data_file_label.setText(tr("data_file", "数据文件:"))
@@ -338,6 +341,8 @@ class MainWindow(FluentWindow):
         self.about_btn.setText(tr("about", "关于"))
         self.theme_card.title_label.setText(tr("settings_theme_title", "外观主题"))
         self.theme_card.subtitle_label.setText(tr("settings_theme_desc", "手动切换浅色、深色，或跟随系统设置。"))
+        self.runtime_card.title_label.setText(tr("settings_runtime_title", "运行参数"))
+        self.runtime_card.subtitle_label.setText(tr("settings_runtime_desc", "调整后端分析任务使用的线程数量。"))
         self.language_card.title_label.setText(tr("language", "语言 / Language"))
         self.language_card.subtitle_label.setText(tr("settings_language_desc", "语言切换会立即更新界面文本。"))
         self.help_card.title_label.setText(tr("help", "帮助"))
@@ -354,9 +359,7 @@ class MainWindow(FluentWindow):
 
     def init_ui(self):
         """初始化所有UI组件"""
-        # Mica can render with incorrect transparent bands on some Windows/QtWebEngine setups.
-        # Use a stable Fluent surface instead of relying on OS composition.
-        self.setMicaEffectEnabled(False)
+        self._apply_window_effects()
 
         # 文件与导出动作
         self.file_menu = QMenu(tr("file", "文件"), self)
@@ -457,6 +460,7 @@ class MainWindow(FluentWindow):
         page.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         content = QWidget(page)
+        content.setObjectName(f"{object_name}_content")
         layout = QVBoxLayout(content)
         layout.setContentsMargins(32, 18, 32, 28)
         layout.setSpacing(16)
@@ -467,6 +471,7 @@ class MainWindow(FluentWindow):
         layout.addWidget(subtitle_label)
 
         page.setWidget(content)
+        page.viewport().setAutoFillBackground(False)
         page.content_widget = content
         page.page_layout = layout
         page.title_label = title_label
@@ -622,12 +627,12 @@ class MainWindow(FluentWindow):
         command_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.open_command_action = Action(FIF.FOLDER, tr("open_file", "打开数据文件"), self)
         self.open_command_action.triggered.connect(self.browse_file)
-        self.export_command_action = Action(FIF.SAVE, tr("export_menu", "导出"), self)
-        self.export_command_action.setMenu(self.export_menu)
         self.manual_command_action = Action(FIF.HELP, tr("help_manual", "用户手册"), self)
         self.manual_command_action.triggered.connect(self.show_manual)
         command_bar.addAction(self.open_command_action)
-        command_bar.addAction(self.export_command_action)
+        self.export_command_button = DropDownPushButton(FIF.SAVE, tr("export_menu", "导出"))
+        self.export_command_button.setMenu(self.export_menu)
+        command_bar.addWidget(self.export_command_button)
         command_bar.addAction(self.manual_command_action)
         command_card.card_layout.addWidget(command_bar)
 
@@ -643,17 +648,6 @@ class MainWindow(FluentWindow):
         file_layout.addWidget(self.browse_btn)
         command_card.card_layout.addLayout(file_layout)
 
-        runtime_layout = QHBoxLayout()
-        runtime_layout.setSpacing(10)
-        self.thread_label = BodyLabel(tr("thread_count", "线程数:"))
-        runtime_layout.addWidget(self.thread_label)
-        self.thread_spin = FluentSpinBox()
-        self.thread_spin.setRange(1, 4 if os.cpu_count() >= 4 else os.cpu_count())
-        self.thread_spin.setValue(os.cpu_count())
-        self.thread_spin.setFixedWidth(110)
-        runtime_layout.addWidget(self.thread_spin)
-        runtime_layout.addStretch()
-        command_card.card_layout.addLayout(runtime_layout)
         layout.addWidget(command_card)
 
         quick_layout = QVBoxLayout()
@@ -777,6 +771,24 @@ class MainWindow(FluentWindow):
         self.theme_card.card_layout.addLayout(theme_layout)
         layout.addWidget(self.theme_card)
 
+        self.runtime_card = self._create_card(
+            tr("settings_runtime_title", "运行参数"),
+            tr("settings_runtime_desc", "调整后端分析任务使用的线程数量。")
+        )
+        runtime_layout = QHBoxLayout()
+        runtime_layout.setSpacing(10)
+        self.thread_label = BodyLabel(tr("thread_count", "线程数:"))
+        runtime_layout.addWidget(self.thread_label)
+        self.thread_spin = FluentSpinBox()
+        max_threads = max(1, os.cpu_count() or 1)
+        self.thread_spin.setRange(1, max_threads)
+        self.thread_spin.setValue(min(4, max_threads))
+        self.thread_spin.setFixedWidth(120)
+        runtime_layout.addWidget(self.thread_spin)
+        runtime_layout.addStretch()
+        self.runtime_card.card_layout.addLayout(runtime_layout)
+        layout.addWidget(self.runtime_card)
+
         self.language_card = self._create_card(
             tr("language", "语言 / Language"),
             tr("settings_language_desc", "语言切换会立即更新界面文本。")
@@ -820,8 +832,41 @@ class MainWindow(FluentWindow):
             setTheme(Theme.LIGHT, save=True)
         else:
             setTheme(Theme.AUTO, save=True)
+        self._apply_window_effects()
         self.update_webview_theme()
         self.update_log_detail_theme()
+        QApplication.style().unpolish(self)
+        QApplication.style().polish(self)
+        self.update()
+
+    def _apply_window_effects(self):
+        """Enable Win11 shell effects while keeping a solid fallback on older systems."""
+        is_win11 = sys.platform == "win32" and sys.getwindowsversion().build >= 22000
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, is_win11)
+        self.setMicaEffectEnabled(is_win11)
+
+        if not is_win11:
+            return
+
+        try:
+            self.windowEffect.addShadowEffect(self.winId())
+        except Exception:
+            pass
+
+        try:
+            import ctypes
+
+            DWMWA_WINDOW_CORNER_PREFERENCE = 33
+            DWMWCP_ROUND = 2
+            preference = ctypes.c_int(DWMWCP_ROUND)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                int(self.winId()),
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                ctypes.byref(preference),
+                ctypes.sizeof(preference)
+            )
+        except Exception:
+            pass
 
     def update_export_actions(self):
         # PCAP导出可用：仅当有原始pcap且转换后的csv存在
@@ -1173,8 +1218,12 @@ class MainWindow(FluentWindow):
     def update_log_detail_theme(self):
         bg_color, text_color = get_theme_colors()
         dark = isDarkTheme()
-        surface_color = "#2b2b2b" if dark else "#ffffff"
-        card_color = "#323232" if dark else "#f7f9fc"
+        mica_enabled = self.isMicaEffectEnabled()
+        window_bg = "transparent" if mica_enabled else bg_color
+        page_bg = "rgba(32, 32, 32, 178)" if dark else "rgba(245, 247, 251, 190)"
+        scroll_bg = "transparent" if mica_enabled else bg_color
+        surface_color = "rgba(43, 43, 43, 232)" if dark else "rgba(255, 255, 255, 235)"
+        card_color = "rgba(50, 50, 50, 225)" if dark else "rgba(247, 249, 252, 230)"
         border_color = "#4a4a4a" if dark else "#d8dce5"
         header_bg = "#3a3a3a" if dark else "#eef3fb"
         alt_bg = "#303030" if dark else "#f8fbff"
@@ -1183,11 +1232,32 @@ class MainWindow(FluentWindow):
 
         self.setStyleSheet(f"""
             #NetworkAnalyzerWindow {{
-                background-color: {bg_color};
+                background-color: {window_bg};
                 color: {text_color};
             }}
-            #workbench {{
+            ScrollArea, QScrollArea {{
+                background-color: {scroll_bg};
+                border: none;
+            }}
+            QWidget#customRuleContent {{
+                background-color: {page_bg};
+                color: {text_color};
+            }}
+            QStackedWidget {{
                 background-color: transparent;
+                border: none;
+            }}
+            QWidget#dashboard_content,
+            QWidget#topology_content,
+            QWidget#traffic_content,
+            QWidget#path_content,
+            QWidget#anomaly_content,
+            QWidget#rules_content,
+            QWidget#subgraph_content,
+            QWidget#results_content,
+            QWidget#settings_content {{
+                background-color: {page_bg};
+                color: {text_color};
             }}
             CardWidget {{
                 background-color: {surface_color};
@@ -1220,23 +1290,27 @@ class MainWindow(FluentWindow):
                 background-color: {hover_bg};
             }}
             QGroupBox {{
-                background-color: {surface_color};
+                background-color: {card_color};
                 color: {text_color};
                 border: 1px solid {border_color};
                 border-radius: 8px;
                 margin-top: 14px;
-                padding: 12px;
+                padding: 14px;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 12px;
                 padding: 0 6px;
                 color: {accent};
-                background-color: {surface_color};
+                background-color: {card_color};
             }}
-            QScrollArea {{
-                background-color: transparent;
-                border: none;
+            QLabel:disabled, BodyLabel:disabled {{
+                color: {"#8a8a8a" if dark else "#8f96a3"};
+            }}
+            LineEdit:disabled, ComboBox:disabled, SpinBox:disabled, DoubleSpinBox:disabled {{
+                color: {"#8a8a8a" if dark else "#8f96a3"};
+                background-color: {"#282828" if dark else "#eef1f6"};
+                border-color: {"#3b3b3b" if dark else "#d7dce5"};
             }}
         """)
 

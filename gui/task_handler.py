@@ -41,7 +41,7 @@ class TaskHandler(QObject):
         self.main.result_detail.clear()
         self.task_output_buffer.clear()
 
-        self.main.output_tabs.setCurrentIndex(0)
+        self._show_output_view("log")
 
         self.worker = AnalyzerWorker(cmd)
         self.worker.output.connect(self.handle_worker_output)
@@ -111,9 +111,35 @@ class TaskHandler(QObject):
             self.parse_star_to_table()
 
         if self.main.result_table.rowCount() > 0:
-            self.main.output_tabs.setCurrentIndex(1)
+            self._show_output_view("table")
         elif len(self.main.result_detail.toPlainText()) > 0:
-            self.main.output_tabs.setCurrentIndex(2)
+            self._show_output_view("detail")
+
+    def _show_output_view(self, route_key):
+        """Switch to the requested output view across old and new result layouts."""
+        pivot = getattr(self.main, "output_pivot", None)
+        stack = getattr(self.main, "output_stack", None)
+
+        if pivot is not None and stack is not None:
+            widgets = {
+                "log": self.main.log_text,
+                "table": self.main.result_table,
+                "detail": self.main.result_detail,
+            }
+            widget = widgets.get(route_key)
+            if widget is not None:
+                pivot.setCurrentItem(route_key)
+                stack.setCurrentWidget(widget)
+
+            results_interface = getattr(self.main, "results_interface", None)
+            if results_interface is not None:
+                self.main.switchTo(results_interface)
+            return
+
+        output_tabs = getattr(self.main, "output_tabs", None)
+        if output_tabs is not None:
+            index = {"log": 0, "table": 1, "detail": 2}.get(route_key, 0)
+            output_tabs.setCurrentIndex(index)
 
     def parse_custom_rule_to_table(self):
         """将自定义规则检测结果填入表格"""

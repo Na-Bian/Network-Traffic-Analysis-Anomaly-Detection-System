@@ -20,6 +20,8 @@
   "settings_theme_auto": "跟随系统",
   "settings_theme_light": "浅色",
   "settings_theme_dark": "深色",
+  "settings_runtime_title": "运行参数",
+  "settings_runtime_desc": "调整后端分析任务使用的线程数量。",
   "dashboard_command_title": "开始分析",
   "dashboard_command_desc": "选择数据文件后，系统会自动生成全网拓扑并激活分析功能。",
   "quick_topology_title": "拓扑总览",
