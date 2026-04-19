@@ -45,8 +45,12 @@ class TaskHandler(QObject):
         self.worker = AnalyzerWorker(cmd)
         self.worker.output.connect(self.handle_worker_output)
         self.worker.error.connect(self.handle_worker_error)
+        worker = self.worker
 
         def success_handler():
+            collected_output = getattr(worker, "output_lines", None)
+            if collected_output is not None:
+                self.task_output_buffer = list(collected_output)
             self.main.log_text.append(
                 tr("task_complete", "\n[{}] ✅ 任务执行完成！正在解析结果...").format(
                     QTime.currentTime().toString()
@@ -275,7 +279,7 @@ class TaskHandler(QObject):
         # 确定度量值显示标签
         metric_label = {
             "min-congestion": tr("path_detail_congestion_label", "拥塞值: {}"),
-            "min-hop": tr("path_detail_hop_label", "跳数: {}"),
+            "min-hop": tr("path_detail_risk_label", "风险值: {}"),
             "min-risk": tr("path_detail_risk_label", "风险值: {}")
         }.get(task_type, tr("path_detail_congestion_label", "拥塞值: {}"))
 
@@ -324,7 +328,7 @@ class TaskHandler(QObject):
                 ips = re.findall(r'\d+\.\d+\.\d+\.\d+', ip_part)
                 if ips:
                     formatted = " → ".join(ips)
-                    metric_pattern = r'risk=([\d.]+)' if task_type == "min-risk" else r'congestion=([\d.]+)'
+                    metric_pattern = r'risk=([\d.]+)' if task_type == "min-risk" else r'(?:congestion|risk)=([\d.]+)'
                     metric_match = re.search(metric_pattern, line)
                     if metric_match:
                         metric_val = metric_match.group(1)
@@ -384,7 +388,7 @@ class TaskHandler(QObject):
             if current_section and "|" in line and re.search(r'\d+\.\d+\.\d+\.\d+', line):
                 path_found = True
                 stats[current_section]["count"] += 1
-                metric_pattern = r'risk=([\d.]+)' if current_section == "最小风险" else r'congestion=([\d.]+)'
+                metric_pattern = r'risk=([\d.]+)' if current_section == "最小风险" else r'(?:congestion|risk)=([\d.]+)'
                 metric_match = re.search(metric_pattern, line)
                 if metric_match:
                     val = float(metric_match.group(1))
@@ -445,11 +449,11 @@ class TaskHandler(QObject):
             ips = re.findall(r'\d+\.\d+\.\d+\.\d+', parts[0])
             if ips:
                 formatted = " → ".join(ips)
-                metric_pattern = r'risk=([\d.]+)' if strategy == "最小风险" else r'congestion=([\d.]+)'
+                metric_pattern = r'risk=([\d.]+)' if strategy == "最小风险" else r'(?:congestion|risk)=([\d.]+)'
                 metric_match = re.search(metric_pattern, line)
                 if metric_match:
-                    label_key = "compare_paths_risk_label" if strategy == "最小风险" else "compare_paths_congestion_label"
-                    label_fallback = "风险值: {}" if strategy == "最小风险" else "拥塞值: {}"
+                    label_key = "compare_paths_risk_label" if strategy in ("最小跳数", "最小风险") else "compare_paths_congestion_label"
+                    label_fallback = "风险值: {}" if strategy in ("最小跳数", "最小风险") else "拥塞值: {}"
                     formatted += f" <span style='color:#7f8c8d;'>({tr(label_key, label_fallback).format(metric_match.group(1))})</span>"
                 html += f"<p style='margin-left:20px; font-family:monospace;'>{formatted}</p>"
 

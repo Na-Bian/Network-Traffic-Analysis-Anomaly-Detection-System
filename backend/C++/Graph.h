@@ -140,6 +140,8 @@ public:
     void addRecord(const IPAddress &srcIP, const IPAddress &dstIP, uint8_t protocol, uint16_t srcPort, uint16_t dstPort,
                    int dataSize, double duration);
 
+    void mergeFrom(const Graph &other);
+
     // 端口扫描攻击者检测
     // 端口扫描攻击者通常会对同一个IP的大量不同端口发送探测包，寻找开放的服务
     [[nodiscard]] std::set<PortScanner> detectPortScanners(int portThreshold = 20,

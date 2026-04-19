@@ -90,6 +90,14 @@ public:
         vertices[index].totalHTTPSData += dataSize;
     }
 
+    void addTrafficTotals(const int index, const long long inData, const long long outData,
+                          const long long httpsData) {
+        checkIndex(index);
+        vertices[index].totalInData += inData;
+        vertices[index].totalOutData += outData;
+        vertices[index].totalHTTPSData += httpsData;
+    }
+
     //函数reserve用于预分配节点列表的内存，以提高性能
     void reserve(const size_t capacity) { vertices.reserve(capacity); }
 
@@ -108,6 +116,11 @@ public:
         checkIndex(index);
         //转发给对应节点的边列表对象，添加或合并当前边
         vertices[index].edgesList.addEdge(dstIndex, protocol, srcPort, dstPort, dataSize, duration);
+    }
+
+    void mergeEdgeForIndex(const int index, const int dstIndex, const Edges::EdgeInfo &edgeInfo) {
+        checkIndex(index);
+        vertices[index].edgesList.mergeEdge(dstIndex, edgeInfo);
     }
 
 

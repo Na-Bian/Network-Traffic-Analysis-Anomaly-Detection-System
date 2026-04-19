@@ -406,6 +406,11 @@ class MainWindow(FluentWindow):
             "render_aggregate_large_graph_tooltip",
             "当图规模很大且使用 Sigma 时，先显示网段级总览，点击节点展开局部子图。"
         ))
+        if hasattr(self, "render_card"):
+            self.render_card.title_label.setText(tr("render_settings_title", "渲染控制"))
+            self.render_card.subtitle_label.setText(
+                tr("render_settings_desc", "根据图规模选择 vis-network 或 Sigma，并对超大图启用降载策略。")
+            )
 
         self.flow_sort_tab.retranslate_ui()
         self.path_tab.retranslate_ui()
@@ -696,13 +701,19 @@ class MainWindow(FluentWindow):
             available_width = min(available_width, self.dashboard_hero_text_container.width())
 
         is_english = lang_mgr.current_lang == "en_US"
-        label.setWordWrap(False)
+        label.setWordWrap(is_english)
         label.setMaximumWidth(760 if is_english else 880)
 
-        base_size = 24 if is_english else 21
-        min_size = 20 if is_english else 18
+        base_size = 22 if is_english else 21
+        min_size = 19 if is_english else 18
 
         font = label.font()
+        if is_english:
+            wrapped_font = QFont(font)
+            wrapped_font.setPointSize(base_size)
+            label.setFont(wrapped_font)
+            return
+
         for point_size in range(base_size, min_size - 1, -1):
             test_font = QFont(font)
             test_font.setPointSize(point_size)
@@ -1222,7 +1233,7 @@ class MainWindow(FluentWindow):
 
     def _build_topology_page(self):
         layout = self.topology_interface.page_layout
-        render_card = self._create_card(
+        self.render_card = self._create_card(
             tr("render_settings_title", "渲染控制"),
             tr("render_settings_desc", "根据图规模选择 vis-network 或 Sigma，并对超大图启用降载策略。")
         )
@@ -1258,8 +1269,8 @@ class MainWindow(FluentWindow):
         ))
         render_layout.addWidget(self.aggregate_graph_checkbox)
         render_layout.addStretch()
-        render_card.card_layout.addLayout(render_layout)
-        layout.addWidget(render_card)
+        self.render_card.card_layout.addLayout(render_layout)
+        layout.addWidget(self.render_card)
 
         graph_card = CardWidget()
         graph_card.setMinimumHeight(520)

@@ -2,6 +2,7 @@
 import os
 import subprocess
 import sys
+from threading import Lock, Thread
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -18,6 +19,8 @@ class AnalyzerWorker(QThread):
     def __init__(self, cmd, parent=None):
         super().__init__(parent)
         self.cmd = cmd
+        self.output_lines = []
+        self._output_lock = Lock()
 
     def run(self):
         try:
@@ -40,16 +43,21 @@ class AnalyzerWorker(QThread):
                 for line in iter(stream.readline, ''):
                     line = line.strip()
                     if line:
+                        with self._output_lock:
+                            self.output_lines.append(line)
                         if is_error:
                             self.error.emit(line)  # 错误信息用error信号
                         else:
                             self.output.emit(line)
 
-            from threading import Thread
-            Thread(target=read_stream, args=(proc.stdout, False), daemon=True).start()
-            Thread(target=read_stream, args=(proc.stderr, True), daemon=True).start()
+            stdout_thread = Thread(target=read_stream, args=(proc.stdout, False), daemon=True)
+            stderr_thread = Thread(target=read_stream, args=(proc.stderr, True), daemon=True)
+            stdout_thread.start()
+            stderr_thread.start()
 
             proc.wait()
+            stdout_thread.join()
+            stderr_thread.join()
 
             if proc.returncode != 0:
                 self.error.emit(f"进程退出，返回码: {proc.returncode}")

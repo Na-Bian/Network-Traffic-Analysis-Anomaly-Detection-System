@@ -65,6 +65,37 @@ void Graph::addRecord(const IPAddress &srcIP, const IPAddress &dstIP, const uint
     verticesList.addEdgeForIndex(srcIndex, dstIndex, protocol, srcPort, dstPort, dataSize, duration);
 }
 
+void Graph::mergeFrom(const Graph &other) {
+    const int otherVertexCount = other.getVertexCount();
+    vector<int> indexMap(otherVertexCount, -1);
+
+    for (int i = 0; i < otherVertexCount; ++i) {
+        const IPAddress ip = other.verticesList.getIP(i);
+        int dstIndex = verticesList.findVertexIndex(ip);
+        if (dstIndex == -1) {
+            verticesList.addVertex(ip);
+            dstIndex = verticesList.getVertexCount() - 1;
+        }
+
+        indexMap[i] = dstIndex;
+        verticesList.addTrafficTotals(
+            dstIndex,
+            other.verticesList.getTotalInData(i),
+            other.verticesList.getTotalOutData(i),
+            other.verticesList.getTotalHTTPSData(i)
+        );
+    }
+
+    for (int src = 0; src < otherVertexCount; ++src) {
+        const int remappedSrc = indexMap[src];
+        const auto &edges = other.verticesList.getEdges(src);
+        for (const int edgeIdx: edges.getAllEdgeIndices()) {
+            const auto edgeInfo = edges.getEdgeInfo(edgeIdx);
+            verticesList.mergeEdgeForIndex(remappedSrc, indexMap[edgeInfo.dstIndex], edgeInfo);
+        }
+    }
+}
+
 //端口扫描攻击者检测
 set<PortScanner> Graph::detectPortScanners(const int portThreshold,
                                            const double outRatioThreshold,

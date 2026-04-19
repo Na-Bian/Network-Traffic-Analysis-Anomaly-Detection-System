@@ -156,7 +156,7 @@ public:
         fin.open(CSVFile);
         std::getline(fin, line); // 跳过标题行
 
-        std::vector<std::future<std::vector<Record> > > futures; //存储线程的future对象
+        std::vector<std::future<Graph> > futures; //存储线程的future对象
 
         const unsigned int base = linesCount / numThreads; //计算每个线程需要处理的行数
         const unsigned int remainder = linesCount % numThreads; //计算余数
@@ -169,30 +169,29 @@ public:
             const unsigned int chunkFirstLine = firstLineInChunk;
             std::string chunk = readNextLines(fin, linesToRead); // 读取若干行数据作为一个块
             firstLineInChunk += linesToRead;
-            futures.push_back(std::async(std::launch::async, [chunk, chunkFirstLine]() {
+            futures.push_back(std::async(std::launch::async, [chunk = std::move(chunk), chunkFirstLine]() {
                 std::stringstream ss(chunk); //将块数据转换为字符串流，逐行解析
                 std::string string;
                 unsigned int lineNumber = chunkFirstLine;
-                std::vector<Record> records;
+                Graph localGraph;
 
                 while (std::getline(ss, string)) {
                     try {
-                        records.push_back(parseRecord(string));
+                        const Record record = parseRecord(string);
+                        localGraph.addRecord(record.srcIP, record.dstIP, record.protocol, record.srcPort, record.dstPort,
+                                             record.dataSize, record.duration);
                     } catch (const std::exception &e) {
                         std::cout << "数据行格式错误(第" << lineNumber << "行): " << string
                                 << " 错误信息: " << e.what() << std::endl;
                     }
                     ++lineNumber;
                 }
-                return records;
+                return localGraph;
             }));
         }
 
         for (auto &f: futures) {
-            for (const auto &record: f.get()) {
-                graph.addRecord(record.srcIP, record.dstIP, record.protocol, record.srcPort, record.dstPort,
-                                record.dataSize, record.duration);
-            }
+            graph.mergeFrom(f.get());
         }
 
         fin.close();

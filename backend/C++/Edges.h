@@ -118,6 +118,37 @@ public:
 			}); // 列表初始化新边的目的IP地址索引、统计数据和协议统计数据
 		dstToIndex[dstIndex] = getEdgeCount() - 1; // 更新缓存，映射目的IP地址索引到新边的索引
 	}
+
+	void mergeEdge(const int dstIndex, const EdgeInfo& sourceEdge) {
+		if (const int it = findEdgeIndex(dstIndex); it != -1) {
+			Edge& edge = edges[it];
+			edge.totalDataSize += sourceEdge.totalDataSize;
+			edge.totalDuration += sourceEdge.totalDuration;
+
+			for (const auto& [protocol, sourceStats] : sourceEdge.protocolStats) {
+				auto& stats = edge.protocolStats[protocol];
+				stats.dataSize += sourceStats.dataSize;
+				stats.duration += sourceStats.duration;
+				stats.ports.insert(sourceStats.ports.begin(), sourceStats.ports.end());
+				for (const auto& [portPair, traffic] : sourceStats.portTraffic) {
+					stats.portTraffic[portPair] += traffic;
+				}
+			}
+			return;
+		}
+
+		Edge edge{
+			dstIndex,
+			sourceEdge.totalDataSize,
+			sourceEdge.totalDuration,
+			{}
+		};
+		for (const auto& [protocol, sourceStats] : sourceEdge.protocolStats) {
+			edge.protocolStats.emplace(protocol, sourceStats);
+		}
+		edges.push_back(std::move(edge));
+		dstToIndex[dstIndex] = getEdgeCount() - 1;
+	}
 };
 
 
