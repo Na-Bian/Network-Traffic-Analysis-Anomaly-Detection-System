@@ -2,13 +2,13 @@ import argparse
 import sys
 
 try:
-    from backend.renderers import render_vis_html
+    from backend.renderers import render_graph_html
 except ModuleNotFoundError:
-    from renderers import render_vis_html
+    from renderers import render_graph_html
 
 
 def generate_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white"):
-    return render_vis_html(json_path, output_html_path, bgcolor, fontcolor)
+    return render_graph_html(json_path, output_html_path, bgcolor, fontcolor)
 
 
 if __name__ == "__main__":

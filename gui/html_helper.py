@@ -87,6 +87,10 @@ def replace_cdn_with_local(html_path, bg_color, text_color, log_callback=None):
 
         # CDN替换映射
         replacements = [
+            ("https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js",
+             to_file_url(resource_path("resources/sigma/graphology.umd.min.js"))),
+            ("https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js",
+             to_file_url(resource_path("resources/sigma/sigma.min.js"))),
             ("https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css",
              to_file_url(resource_path("resources/vis/vis-network.min.css"))),
             ("https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js",

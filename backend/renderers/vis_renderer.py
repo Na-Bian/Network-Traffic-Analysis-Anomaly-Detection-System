@@ -124,11 +124,11 @@ def _load_graph(json_path):
             raise ValueError(tr("subgraph_error_json_corrupted", "错误：JSON 格式损坏"))
 
 
-def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white"):
-    data = _load_graph(json_path)
+def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white", data=None, mode=None):
+    data = data if data is not None else _load_graph(json_path)
     nodes = data.get("nodes", [])
     links = data.get("links", [])
-    mode = _graph_mode(len(nodes), len(links))
+    mode = mode or _graph_mode(len(nodes), len(links))
     performance_mode = mode == "performance"
     positioned_nodes = _position_nodes(nodes) if performance_mode else {}
 
