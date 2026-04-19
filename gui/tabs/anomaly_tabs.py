@@ -1,9 +1,17 @@
 # gui/tabs/anomaly_tabs.py
 from PyQt6.QtCore import QSignalBlocker
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QStackedWidget, QSizePolicy
 from qfluentwidgets import BodyLabel, ComboBox, DoubleSpinBox, LineEdit, Pivot, PrimaryPushButton, SpinBox
 
 from ..translator import tr
+
+
+def _emphasize_primary_button(button):
+    font = QFont(button.font())
+    font.setPointSize(max(font.pointSize(), 11))
+    font.setWeight(QFont.Weight.DemiBold)
+    button.setFont(font)
 
 
 class PortScanTab(QWidget):
@@ -51,6 +59,7 @@ class PortScanTab(QWidget):
         self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.detect_btn.setMinimumHeight(40)
+        _emphasize_primary_button(self.detect_btn)
         layout.addWidget(self.detect_btn, 3, 0, 1, 3)
         layout.setColumnStretch(1, 1)
         self.retranslate_ui()
@@ -114,6 +123,7 @@ class DDosTab(QWidget):
         self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.detect_btn.setMinimumHeight(40)
+        _emphasize_primary_button(self.detect_btn)
         layout.addWidget(self.detect_btn, 3, 0, 1, 3)
         layout.setColumnStretch(1, 1)
         self.retranslate_ui()
@@ -152,6 +162,7 @@ class StarTab(QWidget):
         self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.detect_btn.setMinimumHeight(40)
+        _emphasize_primary_button(self.detect_btn)
         layout.addWidget(self.detect_btn, 1, 0, 1, 2)
         layout.setColumnStretch(1, 1)
         self.retranslate_ui()

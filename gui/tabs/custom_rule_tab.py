@@ -1,9 +1,17 @@
 # gui/tabs/custom_rule_tab.py
 from PyQt6.QtCore import QSignalBlocker
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QWidget, QGridLayout, QGroupBox, QVBoxLayout, QHBoxLayout, QSizePolicy
 from qfluentwidgets import BodyLabel, ComboBox, LineEdit, PrimaryPushButton, RadioButton
 
 from ..translator import tr
+
+
+def _emphasize_primary_button(button):
+    font = QFont(button.font())
+    font.setPointSize(max(font.pointSize(), 11))
+    font.setWeight(QFont.Weight.DemiBold)
+    button.setFont(font)
 
 
 class CustomRuleTab(QWidget):
@@ -135,6 +143,7 @@ class CustomRuleTab(QWidget):
         self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.detect_btn.setMinimumHeight(40)
+        _emphasize_primary_button(self.detect_btn)
         layout.addWidget(self.detect_btn, 5, 0, 1, 3)
 
         layout.setColumnStretch(1, 1)

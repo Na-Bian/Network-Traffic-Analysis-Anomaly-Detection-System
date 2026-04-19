@@ -1,9 +1,17 @@
 # gui/tabs/path_tab.py
 from PyQt6.QtCore import QSignalBlocker
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QWidget, QGridLayout, QSizePolicy
 from qfluentwidgets import BodyLabel, CheckBox, ComboBox, LineEdit, PrimaryPushButton
 
 from ..translator import tr
+
+
+def _emphasize_primary_button(button):
+    font = QFont(button.font())
+    font.setPointSize(max(font.pointSize(), 11))
+    font.setWeight(QFont.Weight.DemiBold)
+    button.setFont(font)
 
 
 class PathTab(QWidget):
@@ -47,6 +55,7 @@ class PathTab(QWidget):
         self.path_btn = PrimaryPushButton()
         self.path_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.path_btn.setMinimumHeight(40)
+        _emphasize_primary_button(self.path_btn)
         layout.addWidget(self.path_btn, 4, 0, 1, 2)
 
         layout.setColumnStretch(1, 1)
