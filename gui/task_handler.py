@@ -147,21 +147,22 @@ class TaskHandler(QObject):
         headers = None
         pattern = None
         for line in self.task_output_buffer:
-            if line.startswith("节点总流量排序"):  # 后端固定输出，不翻译
+            normalized = line.strip()
+            if "节点总流量排序" in normalized:  # 后端固定输出，不翻译
                 headers = [
                     tr("flow_sort_table_header_ip", "IP地址"),
                     tr("flow_sort_table_header_total_traffic", "总流量（字节）")
                 ]
                 pattern = r"^([\d\.]+),(\d+)$"
                 break
-            elif line.startswith("HTTPS节点流量排序"):  # 后端固定输出
+            elif "HTTPS节点流量排序" in normalized:  # 后端固定输出
                 headers = [
                     tr("flow_sort_table_header_ip", "IP地址"),
                     tr("flow_sort_table_header_https_traffic", "HTTPS流量（字节）")
                 ]
                 pattern = r"^([\d\.]+),(\d+)$"
                 break
-            elif line.startswith("出流量占比 >") or line.startswith("出流量占比 >="):  # 后端固定输出
+            elif normalized.startswith("出流量占比 >") or normalized.startswith("出流量占比 >="):  # 后端固定输出
                 headers = [
                     tr("flow_sort_table_header_ip", "IP地址"),
                     tr("flow_sort_table_header_total_traffic", "总流量（字节）"),
@@ -176,12 +177,15 @@ class TaskHandler(QObject):
 
         row_idx = 0
         for line in self.task_output_buffer:
-            match = re.search(pattern, line)
+            match = re.search(pattern, line.strip())
             if match:
                 self.main.result_table.insertRow(row_idx)
                 for col, val in enumerate(match.groups()):
                     self.main.result_table.setItem(row_idx, col, self.main.centered_table_item(val))
                 row_idx += 1
+
+        if row_idx > 0:
+            self.main.show_output_route("table")
 
     def parse_port_scan_to_table(self):
         headers = [
