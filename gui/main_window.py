@@ -9,17 +9,27 @@ from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import *
 from qfluentwidgets import (
+    Action,
     BodyLabel,
+    CaptionLabel,
     CardWidget,
     CheckBox as FluentCheckBox,
+    CommandBar,
     ComboBox as FluentComboBox,
     FluentIcon as FIF,
     FluentWindow,
+    HeaderCardWidget,
     LineEdit as FluentLineEdit,
+    NavigationItemPosition,
+    Pivot,
     PrimaryPushButton,
     PushButton,
+    ScrollArea,
     SpinBox as FluentSpinBox,
+    StrongBodyLabel,
     SubtitleLabel,
+    TableWidget,
+    TitleLabel,
     isDarkTheme,
     qconfig,
 )
@@ -276,12 +286,9 @@ class MainWindow(FluentWindow):
         self.help_menu.setTitle(tr("help", "帮助"))
         self.manual_action.setText(tr("help_manual", "用户手册"))
         self.about_action.setText(tr("about", "关于"))
-        self.app_title_label.setText(tr("app_title_short", "网络流量分析"))
-        self.app_subtitle_label.setText(tr("app_subtitle", "拓扑可视化、异常检测与路径分析工作台"))
-        self.open_btn.setText(tr("open_file", "打开数据文件"))
-        self.export_btn.setText(tr("export_menu", "导出"))
-        self.lang_btn.setText(tr("language", "语言 / Language"))
-        self.help_btn.setText(tr("help", "帮助"))
+        self.open_command_action.setText(tr("open_file", "打开数据文件"))
+        self.export_command_action.setText(tr("export_menu", "导出"))
+        self.manual_command_action.setText(tr("help_manual", "用户手册"))
         self.thread_label.setText(tr("thread_count", "线程数:"))
         self.data_file_label.setText(tr("data_file", "数据文件:"))
         self.browse_btn.setText(tr("browse", "浏览..."))
@@ -307,18 +314,26 @@ class MainWindow(FluentWindow):
         self.custom_rule_tab.retranslate_ui()
         self.subgraph_tab.retranslate_ui()
 
-        self.tabs.setTabText(0, tr("traffic_sorting", "流量排序"))
-        self.tabs.setTabText(1, tr("path_search", "路径查找"))
-        self.tabs.setTabText(2, tr("anomaly_detection", "异常检测"))
-        self.tabs.setTabText(3, tr("anomaly_tab_custom_rule", "自定义规则"))
-        self.tabs.setTabText(4, tr("subgraph_visualization", "子图可视化"))
-
-        self.output_tabs.setTabText(0, tr("output_log_tab", "⚙️ 运行日志"))
-        self.output_tabs.setTabText(1, tr("output_table_tab", "📊 数据表格"))
-        self.output_tabs.setTabText(2, tr("output_detail_tab", "🗺️ 路径与详情"))
-        nav_item = self.navigationInterface.widget(self.workbench_interface.objectName())
-        if nav_item and hasattr(nav_item, "setText"):
-            nav_item.setText(tr("nav_workbench", "工作台"))
+        self.workbench_interface.title_label.setText(tr("nav_workbench", "工作台"))
+        self.workbench_interface.subtitle_label.setText(tr("dashboard_subtitle", "从数据导入到拓扑分析的一站式入口"))
+        self.topology_interface.title_label.setText(tr("nav_topology", "拓扑视图"))
+        self.topology_interface.subtitle_label.setText(tr("topology_subtitle", "查看全网拓扑、子图和大图渲染结果"))
+        self.traffic_interface.title_label.setText(tr("traffic_sorting", "流量排序"))
+        self.path_interface.title_label.setText(tr("path_search", "路径查找"))
+        self.anomaly_interface.title_label.setText(tr("anomaly_detection", "异常检测"))
+        self.rule_interface.title_label.setText(tr("anomaly_tab_custom_rule", "自定义规则"))
+        self.subgraph_interface.title_label.setText(tr("subgraph_visualization", "子图可视化"))
+        self.results_interface.title_label.setText(tr("nav_results", "结果中心"))
+        self.settings_interface.title_label.setText(tr("settings", "设置"))
+        self.output_pivot.setItemText("log", tr("output_log_tab", "运行日志"))
+        self.output_pivot.setItemText("table", tr("output_table_tab", "数据表格"))
+        self.output_pivot.setItemText("detail", tr("output_detail_tab", "路径与详情"))
+        self.lang_zh_cn_btn.setText(tr("lang_zh_CN", "简体中文"))
+        self.lang_zh_tw_btn.setText(tr("lang_zh_TW", "繁体中文"))
+        self.lang_en_btn.setText(tr("lang_en_US", "English"))
+        self.manual_btn.setText(tr("help_manual", "用户手册"))
+        self.about_btn.setText(tr("about", "关于"))
+        self._set_navigation_texts()
 
         if not self.is_data_available:
             self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
@@ -383,59 +398,222 @@ class MainWindow(FluentWindow):
         self.help_menu.addAction(self.manual_action)
         self.help_menu.addAction(self.about_action)
 
-        # Fluent 工作台页
-        self.workbench_interface = QWidget(self)
-        self.workbench_interface.setObjectName("workbench")
+        # 页面与功能控件
+        self.flow_sort_tab = FlowSortTab()
+        self.path_tab = PathTab()
+        self.anomaly_tab = AnomalyTab()
+        self.subgraph_tab = SubgraphTab()
+        self.custom_rule_tab = CustomRuleTab()
+
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setStyleSheet("font-family: Consolas, monospace; font-size: 12px;")
+
+        self.result_table = TableWidget()
+        self.result_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.result_table.horizontalHeader().setStretchLastSection(True)
+
+        self.result_detail = QTextBrowser()
+        self.result_detail.setStyleSheet("font-family: Consolas, monospace; font-size: 13px;")
+
+        self.web_view = QWebEngineView()
+        settings = self.web_view.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+
+        self._build_fluent_pages()
+
+        # 连接按钮信号
+        self.flow_sort_tab.flow_sort_btn.clicked.connect(self.run_flow_sort)
+        self.path_tab.path_btn.clicked.connect(self.run_path_searching)
+        self.anomaly_tab.port_scan_tab.detect_btn.clicked.connect(self.run_port_scan)
+        self.anomaly_tab.ddos_tab.detect_btn.clicked.connect(self.run_ddos_detection)
+        self.anomaly_tab.star_tab.detect_btn.clicked.connect(self.run_star_detection)
+        self.subgraph_tab.generate_btn.clicked.connect(self.generate_subgraph)
+        self.custom_rule_tab.detect_btn.clicked.connect(self.run_custom_rule)
+
+        self.update_log_detail_theme()
+
+    def _create_page(self, object_name, title, subtitle):
+        page = ScrollArea(self)
+        page.setObjectName(object_name)
+        page.setWidgetResizable(True)
+        page.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget(page)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 18, 32, 28)
+        layout.setSpacing(16)
+
+        title_label = TitleLabel(title)
+        subtitle_label = CaptionLabel(subtitle)
+        layout.addWidget(title_label)
+        layout.addWidget(subtitle_label)
+
+        page.setWidget(content)
+        page.content_widget = content
+        page.page_layout = layout
+        page.title_label = title_label
+        page.subtitle_label = subtitle_label
+        return page
+
+    def _create_card(self, title, subtitle=None):
+        card = CardWidget()
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 16, 20, 18)
+        layout.setSpacing(10)
+        title_label = StrongBodyLabel(title)
+        layout.addWidget(title_label)
+        subtitle_label = None
+        if subtitle:
+            subtitle_label = CaptionLabel(subtitle)
+            layout.addWidget(subtitle_label)
+        card.card_layout = layout
+        card.title_label = title_label
+        card.subtitle_label = subtitle_label
+        return card
+
+    def _switch_to_interface(self, interface):
+        self.switchTo(interface)
+
+    def _set_navigation_texts(self):
+        items = [
+            (self.workbench_interface, tr("nav_workbench", "工作台")),
+            (self.topology_interface, tr("nav_topology", "拓扑视图")),
+            (self.traffic_interface, tr("traffic_sorting", "流量排序")),
+            (self.path_interface, tr("path_search", "路径查找")),
+            (self.anomaly_interface, tr("anomaly_detection", "异常检测")),
+            (self.rule_interface, tr("anomaly_tab_custom_rule", "自定义规则")),
+            (self.subgraph_interface, tr("subgraph_visualization", "子图可视化")),
+            (self.results_interface, tr("nav_results", "结果中心")),
+            (self.settings_interface, tr("settings", "设置")),
+        ]
+        for interface, text in items:
+            item = self.navigationInterface.widget(interface.objectName())
+            if item and hasattr(item, "setText"):
+                item.setText(text)
+
+    def _add_quick_card(self, parent_layout, icon, title, description, button_text, target):
+        card = CardWidget()
+        card.setMinimumHeight(118)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(14)
+
+        icon_label = QLabel()
+        icon_label.setPixmap(icon.icon().pixmap(30, 30))
+        icon_label.setFixedWidth(36)
+        layout.addWidget(icon_label)
+
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(3)
+        title_label = StrongBodyLabel(title)
+        desc_label = CaptionLabel(description)
+        desc_label.setWordWrap(True)
+        text_layout.addWidget(title_label)
+        text_layout.addWidget(desc_label)
+        layout.addLayout(text_layout, 1)
+
+        button = PushButton(button_text)
+        button.clicked.connect(lambda: self._switch_to_interface(target))
+        layout.addWidget(button)
+        parent_layout.addWidget(card)
+        return card
+
+    def _build_fluent_pages(self):
+        self.workbench_interface = self._create_page(
+            "dashboard",
+            tr("nav_workbench", "工作台"),
+            tr("dashboard_subtitle", "从数据导入到拓扑分析的一站式入口")
+        )
+        self.topology_interface = self._create_page(
+            "topology",
+            tr("nav_topology", "拓扑视图"),
+            tr("topology_subtitle", "查看全网拓扑、子图和大图渲染结果")
+        )
+        self.traffic_interface = self._create_page(
+            "traffic",
+            tr("traffic_sorting", "流量排序"),
+            tr("traffic_subtitle", "按总流量、HTTPS 或出流量占比分析关键流")
+        )
+        self.path_interface = self._create_page(
+            "path",
+            tr("path_search", "路径查找"),
+            tr("path_subtitle", "比较最小拥塞、最小跳数和最小风险路径")
+        )
+        self.anomaly_interface = self._create_page(
+            "anomaly",
+            tr("anomaly_detection", "异常检测"),
+            tr("anomaly_subtitle", "端口扫描、DDoS 目标和星型结构检测")
+        )
+        self.rule_interface = self._create_page(
+            "rules",
+            tr("anomaly_tab_custom_rule", "自定义规则"),
+            tr("rule_subtitle", "用组合条件快速表达业务侧检测规则")
+        )
+        self.subgraph_interface = self._create_page(
+            "subgraph",
+            tr("subgraph_visualization", "子图可视化"),
+            tr("subgraph_subtitle", "围绕指定 IP 生成局部拓扑")
+        )
+        self.results_interface = self._create_page(
+            "results",
+            tr("nav_results", "结果中心"),
+            tr("results_subtitle", "运行日志、表格结果和路径详情")
+        )
+        self.settings_interface = self._create_page(
+            "settings",
+            tr("settings", "设置"),
+            tr("settings_subtitle", "语言、帮助和工程运行选项")
+        )
+
         self.addSubInterface(self.workbench_interface, FIF.HOME, tr("nav_workbench", "工作台"))
+        self.addSubInterface(self.topology_interface, FIF.GLOBE, tr("nav_topology", "拓扑视图"))
+        self.addSubInterface(self.traffic_interface, FIF.SPEED_HIGH, tr("traffic_sorting", "流量排序"))
+        self.addSubInterface(self.path_interface, FIF.CONNECT, tr("path_search", "路径查找"))
+        self.addSubInterface(self.anomaly_interface, FIF.ROBOT, tr("anomaly_detection", "异常检测"))
+        self.addSubInterface(self.rule_interface, FIF.CODE, tr("anomaly_tab_custom_rule", "自定义规则"))
+        self.addSubInterface(self.subgraph_interface, FIF.SHARE, tr("subgraph_visualization", "子图可视化"))
+        self.addSubInterface(self.results_interface, FIF.DOCUMENT, tr("nav_results", "结果中心"))
+        self.addSubInterface(
+            self.settings_interface,
+            FIF.SETTING,
+            tr("settings", "设置"),
+            NavigationItemPosition.BOTTOM
+        )
 
-        self.main_layout = QVBoxLayout(self.workbench_interface)
-        self.main_layout.setSpacing(12)
-        self.main_layout.setContentsMargins(18, 12, 18, 18)
+        self._build_dashboard_page()
+        self._build_topology_page()
+        self._build_feature_page(self.traffic_interface, self.flow_sort_tab, tr("traffic_sorting", "流量排序"))
+        self._build_feature_page(self.path_interface, self.path_tab, tr("path_search", "路径查找"))
+        self._build_feature_page(self.anomaly_interface, self.anomaly_tab, tr("anomaly_detection", "异常检测"))
+        self._build_feature_page(self.rule_interface, self.custom_rule_tab, tr("anomaly_tab_custom_rule", "自定义规则"))
+        self._build_feature_page(self.subgraph_interface, self.subgraph_tab, tr("subgraph_visualization", "子图可视化"))
+        self._build_results_page()
+        self._build_settings_page()
+        self.navigationInterface.setExpandWidth(228)
+        self.navigationInterface.setMinimumExpandWidth(180)
+        self.navigationInterface.expand(useAni=False)
 
-        # 顶部操作区
-        header_card = CardWidget()
-        header_layout = QVBoxLayout(header_card)
-        header_layout.setContentsMargins(18, 14, 18, 14)
-        header_layout.setSpacing(10)
+    def _build_dashboard_page(self):
+        layout = self.workbench_interface.page_layout
 
-        title_row = QHBoxLayout()
-        title_col = QVBoxLayout()
-        title_col.setSpacing(2)
-        self.app_title_label = SubtitleLabel(tr("app_title_short", "网络流量分析"))
-        self.app_subtitle_label = BodyLabel(tr("app_subtitle", "拓扑可视化、异常检测与路径分析工作台"))
-        title_col.addWidget(self.app_title_label)
-        title_col.addWidget(self.app_subtitle_label)
-        title_row.addLayout(title_col)
-        title_row.addStretch()
-
-        self.open_btn = PrimaryPushButton(FIF.FOLDER, tr("open_file", "打开数据文件"))
-        self.open_btn.clicked.connect(self.browse_file)
-        title_row.addWidget(self.open_btn)
-
-        self.export_btn = QToolButton()
-        self.export_btn.setText(tr("export_menu", "导出"))
-        self.export_btn.setIcon(FIF.SAVE.icon())
-        self.export_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.export_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.export_btn.setMenu(self.export_menu)
-        title_row.addWidget(self.export_btn)
-
-        self.lang_btn = QToolButton()
-        self.lang_btn.setText(tr("language", "语言 / Language"))
-        self.lang_btn.setIcon(FIF.LANGUAGE.icon())
-        self.lang_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.lang_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.lang_btn.setMenu(self.lang_menu)
-        title_row.addWidget(self.lang_btn)
-
-        self.help_btn = QToolButton()
-        self.help_btn.setText(tr("help", "帮助"))
-        self.help_btn.setIcon(FIF.HELP.icon())
-        self.help_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.help_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.help_btn.setMenu(self.help_menu)
-        title_row.addWidget(self.help_btn)
-        header_layout.addLayout(title_row)
+        command_card = self._create_card(
+            tr("dashboard_command_title", "开始分析"),
+            tr("dashboard_command_desc", "选择数据文件后，系统会自动生成全网拓扑并激活分析功能。")
+        )
+        command_bar = CommandBar()
+        command_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.open_command_action = Action(FIF.FOLDER, tr("open_file", "打开数据文件"), self)
+        self.open_command_action.triggered.connect(self.browse_file)
+        self.export_command_action = Action(FIF.SAVE, tr("export_menu", "导出"), self)
+        self.export_command_action.setMenu(self.export_menu)
+        self.manual_command_action = Action(FIF.HELP, tr("help_manual", "用户手册"), self)
+        self.manual_command_action.triggered.connect(self.show_manual)
+        command_bar.addAction(self.open_command_action)
+        command_bar.addAction(self.export_command_action)
+        command_bar.addAction(self.manual_command_action)
+        command_card.card_layout.addWidget(command_bar)
 
         file_layout = QHBoxLayout()
         file_layout.setSpacing(10)
@@ -443,21 +621,58 @@ class MainWindow(FluentWindow):
         file_layout.addWidget(self.data_file_label)
         self.file_edit = FluentLineEdit()
         self.file_edit.setReadOnly(True)
-        file_layout.addWidget(self.file_edit)
+        file_layout.addWidget(self.file_edit, 1)
         self.browse_btn = PushButton(tr("browse", "浏览..."))
         self.browse_btn.clicked.connect(self.browse_file)
         file_layout.addWidget(self.browse_btn)
+        command_card.card_layout.addLayout(file_layout)
 
+        runtime_layout = QHBoxLayout()
+        runtime_layout.setSpacing(10)
         self.thread_label = BodyLabel(tr("thread_count", "线程数:"))
-        file_layout.addWidget(self.thread_label)
+        runtime_layout.addWidget(self.thread_label)
         self.thread_spin = FluentSpinBox()
         self.thread_spin.setRange(1, 4 if os.cpu_count() >= 4 else os.cpu_count())
         self.thread_spin.setValue(os.cpu_count())
-        self.thread_spin.setFixedWidth(92)
-        file_layout.addWidget(self.thread_spin)
-        header_layout.addLayout(file_layout)
+        self.thread_spin.setFixedWidth(110)
+        runtime_layout.addWidget(self.thread_spin)
+        runtime_layout.addStretch()
+        command_card.card_layout.addLayout(runtime_layout)
+        layout.addWidget(command_card)
 
-        # 渲染配置行
+        quick_layout = QVBoxLayout()
+        quick_layout.setSpacing(12)
+        self._add_quick_card(
+            quick_layout, FIF.GLOBE,
+            tr("quick_topology_title", "拓扑总览"),
+            tr("quick_topology_desc", "查看自动生成的网络拓扑，并调整大图渲染策略。"),
+            tr("quick_open", "打开"),
+            self.topology_interface
+        )
+        self._add_quick_card(
+            quick_layout, FIF.ROBOT,
+            tr("quick_anomaly_title", "异常研判"),
+            tr("quick_anomaly_desc", "集中运行端口扫描、DDoS 和星型结构检测。"),
+            tr("quick_open", "打开"),
+            self.anomaly_interface
+        )
+        self._add_quick_card(
+            quick_layout, FIF.DOCUMENT,
+            tr("quick_results_title", "结果中心"),
+            tr("quick_results_desc", "查看运行日志、表格输出和路径详情。"),
+            tr("quick_open", "打开"),
+            self.results_interface
+        )
+        layout.addLayout(quick_layout)
+        layout.addStretch()
+
+    def _build_topology_page(self):
+        layout = self.topology_interface.page_layout
+        render_card = self._create_card(
+            tr("render_settings_title", "渲染控制"),
+            tr("render_settings_desc", "根据图规模选择 vis-network 或 Sigma，并对超大图启用降载策略。")
+        )
+
         render_layout = QHBoxLayout()
         render_layout.setSpacing(10)
         self.render_mode_label = BodyLabel(tr("render_mode_label", "渲染模式:"))
@@ -466,7 +681,7 @@ class MainWindow(FluentWindow):
         self.render_mode_combo.addItem(tr("render_mode_auto", "自动"), "auto")
         self.render_mode_combo.addItem(tr("render_mode_vis", "vis-network"), "vis")
         self.render_mode_combo.addItem(tr("render_mode_sigma", "Sigma"), "sigma")
-        self.render_mode_combo.setMinimumWidth(130)
+        self.render_mode_combo.setMinimumWidth(150)
         render_layout.addWidget(self.render_mode_combo)
 
         self.top_k_edges_label = BodyLabel(tr("render_top_k_edges_label", "Top-K 边:"))
@@ -489,75 +704,78 @@ class MainWindow(FluentWindow):
         ))
         render_layout.addWidget(self.aggregate_graph_checkbox)
         render_layout.addStretch()
-        header_layout.addLayout(render_layout)
-        self.main_layout.addWidget(header_card)
+        render_card.card_layout.addLayout(render_layout)
+        layout.addWidget(render_card)
 
-        # 主分割器
-        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.main_splitter.setChildrenCollapsible(False)
+        graph_card = CardWidget()
+        graph_card.setMinimumHeight(520)
+        graph_layout = QVBoxLayout(graph_card)
+        graph_layout.setContentsMargins(0, 0, 0, 0)
+        self.web_view.setMinimumHeight(500)
+        graph_layout.addWidget(self.web_view)
+        layout.addWidget(graph_card, 1)
 
-        self.left_splitter = QSplitter(Qt.Orientation.Vertical)
-        self.left_splitter.setChildrenCollapsible(False)
+    def _build_feature_page(self, page, widget, title):
+        card = HeaderCardWidget()
+        card.setTitle(title)
+        card.viewLayout.setContentsMargins(16, 12, 16, 16)
+        card.viewLayout.addWidget(widget)
+        page.page_layout.addWidget(card)
+        page.page_layout.addStretch()
 
-        # 创建各个选项卡并添加到tabs
-        self.tabs = AdaptiveTabWidget()
-        self.flow_sort_tab = FlowSortTab()
-        self.path_tab = PathTab()
-        self.anomaly_tab = AnomalyTab()
-        self.subgraph_tab = SubgraphTab()
-        self.custom_rule_tab = CustomRuleTab()
+    def _build_results_page(self):
+        layout = self.results_interface.page_layout
+        self.output_pivot = Pivot()
+        self.output_stack = QStackedWidget()
+        self.output_stack.addWidget(self.log_text)
+        self.output_stack.addWidget(self.result_table)
+        self.output_stack.addWidget(self.result_detail)
 
-        self.tabs.addTab(self.flow_sort_tab, tr("traffic_sorting", "流量排序"))
-        self.tabs.addTab(self.path_tab, tr("path_search", "路径查找"))
-        self.tabs.addTab(self.anomaly_tab, tr("anomaly_detection", "异常检测"))
-        self.tabs.addTab(self.custom_rule_tab, tr("anomaly_tab_custom_rule", "自定义规则"))
-        self.tabs.addTab(self.subgraph_tab, tr("subgraph_visualization", "子图可视化"))
+        self.output_pivot.addItem("log", tr("output_log_tab", "运行日志"), lambda: self.output_stack.setCurrentWidget(self.log_text))
+        self.output_pivot.addItem("table", tr("output_table_tab", "数据表格"), lambda: self.output_stack.setCurrentWidget(self.result_table))
+        self.output_pivot.addItem("detail", tr("output_detail_tab", "路径与详情"), lambda: self.output_stack.setCurrentWidget(self.result_detail))
+        self.output_pivot.setCurrentItem("log")
+        self.output_stack.setCurrentWidget(self.log_text)
 
-        self.left_splitter.addWidget(self.tabs)
-        self.tabs.setMinimumHeight(180)
-        self.tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
+        layout.addWidget(self.output_pivot)
+        layout.addWidget(self.output_stack, 1)
 
-        # 输出选项卡
-        self.output_tabs = QTabWidget()
-        self.left_splitter.addWidget(self.output_tabs)
+    def _build_settings_page(self):
+        layout = self.settings_interface.page_layout
+        language_card = self._create_card(
+            tr("language", "语言 / Language"),
+            tr("settings_language_desc", "语言切换会立即更新界面文本。")
+        )
+        lang_layout = QHBoxLayout()
+        lang_layout.setSpacing(10)
+        self.lang_zh_cn_btn = PushButton(tr("lang_zh_CN", "简体中文"))
+        self.lang_zh_tw_btn = PushButton(tr("lang_zh_TW", "繁体中文"))
+        self.lang_en_btn = PushButton(tr("lang_en_US", "English"))
+        self.lang_zh_cn_btn.clicked.connect(lambda: lang_mgr.set_language("zh_CN"))
+        self.lang_zh_tw_btn.clicked.connect(lambda: lang_mgr.set_language("zh_TW"))
+        self.lang_en_btn.clicked.connect(lambda: lang_mgr.set_language("en_US"))
+        lang_layout.addWidget(self.lang_zh_cn_btn)
+        lang_layout.addWidget(self.lang_zh_tw_btn)
+        lang_layout.addWidget(self.lang_en_btn)
+        lang_layout.addStretch()
+        language_card.card_layout.addLayout(lang_layout)
+        layout.addWidget(language_card)
 
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        self.log_text.setStyleSheet("font-family: Consolas, monospace; font-size: 12px;")
-        self.output_tabs.addTab(self.log_text, tr("output_log_tab", "⚙️ 运行日志"))
-
-        self.result_table = QTableWidget()
-        self.result_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.result_table.horizontalHeader().setStretchLastSection(True)
-        self.output_tabs.addTab(self.result_table, tr("output_table_tab", "📊 数据表格"))
-
-        self.result_detail = QTextBrowser()
-        self.result_detail.setStyleSheet("font-family: Consolas, monospace; font-size: 13px;")
-        self.output_tabs.addTab(self.result_detail, tr("output_detail_tab", "🗺️ 路径与详情"))
-
-        self.left_splitter.setSizes([140, 460])
-        self.main_splitter.addWidget(self.left_splitter)
-
-        # Web视图
-        self.web_view = QWebEngineView()
-        settings = self.web_view.settings()
-        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
-        self.main_splitter.addWidget(self.web_view)
-
-        self.main_splitter.setSizes([390, 890])
-        self.main_layout.addWidget(self.main_splitter, 1)
-
-        # 连接按钮信号
-        self.flow_sort_tab.flow_sort_btn.clicked.connect(self.run_flow_sort)
-        self.path_tab.path_btn.clicked.connect(self.run_path_searching)
-        self.anomaly_tab.port_scan_tab.detect_btn.clicked.connect(self.run_port_scan)
-        self.anomaly_tab.ddos_tab.detect_btn.clicked.connect(self.run_ddos_detection)
-        self.anomaly_tab.star_tab.detect_btn.clicked.connect(self.run_star_detection)
-        self.subgraph_tab.generate_btn.clicked.connect(self.generate_subgraph)
-        self.custom_rule_tab.detect_btn.clicked.connect(self.run_custom_rule)
-
-        self.update_log_detail_theme()
+        help_card = self._create_card(
+            tr("help", "帮助"),
+            tr("settings_help_desc", "查看用户手册或软件版本信息。")
+        )
+        help_layout = QHBoxLayout()
+        self.manual_btn = PushButton(FIF.HELP, tr("help_manual", "用户手册"))
+        self.about_btn = PushButton(FIF.INFO, tr("about", "关于"))
+        self.manual_btn.clicked.connect(self.show_manual)
+        self.about_btn.clicked.connect(self.about)
+        help_layout.addWidget(self.manual_btn)
+        help_layout.addWidget(self.about_btn)
+        help_layout.addStretch()
+        help_card.card_layout.addLayout(help_layout)
+        layout.addWidget(help_card)
+        layout.addStretch()
 
     def update_export_actions(self):
         # PCAP导出可用：仅当有原始pcap且转换后的csv存在
@@ -886,6 +1104,7 @@ class MainWindow(FluentWindow):
             url = QUrl.fromLocalFile(os.path.abspath(html_file))
             self.web_view.setUrl(url)
             self.has_graph = True
+            self.switchTo(self.topology_interface)
             self.log_text.append(tr("display_html_success", "子图已加载……"))
         except Exception as e:
             self.log_text.append(
@@ -993,75 +1212,12 @@ class MainWindow(FluentWindow):
         """)
         self.result_table.setAlternatingRowColors(True)
 
-        # 主选项卡
-        self.tabs.setStyleSheet(f"""
-            QTabWidget::pane {{
-                border: 1px solid {border_color};
-                background-color: {surface_color};
-                border-radius: 8px;
-                top: -1px;
-            }}
-            QTabBar::tab {{
+        self.output_stack.setStyleSheet(f"""
+            QStackedWidget {{
                 background-color: transparent;
-                color: {text_color};
                 border: none;
-                border-radius: 6px;
-                padding: 7px 12px;
-                margin-right: 4px;
-            }}
-            QTabBar::tab:selected {{
-                background-color: {header_bg};
-                color: {accent};
-            }}
-            QTabBar::tab:hover {{
-                background-color: {hover_bg};
             }}
         """)
-
-        # 输出选项卡
-        self.output_tabs.setStyleSheet(f"""
-            QTabWidget::pane {{
-                border: 1px solid {border_color};
-                background-color: {surface_color};
-                border-radius: 8px;
-                top: -1px;
-            }}
-            QTabBar::tab {{
-                background-color: transparent;
-                color: {text_color};
-                border: none;
-                border-radius: 6px;
-                padding: 7px 12px;
-                margin-right: 4px;
-            }}
-            QTabBar::tab:selected {{
-                background-color: {header_bg};
-                color: {accent};
-            }}
-            QTabBar::tab:hover {{
-                background-color: {hover_bg};
-            }}
-        """)
-
-        # 分割器
-        splitter_style = f"""
-            QSplitter {{
-                background-color: transparent;
-                border: none;
-                padding: 0px; 
-            }}
-            QSplitter::handle {{
-                background-color: transparent;
-                width: 8px;
-                height: 8px;
-            }}
-            QSplitter::handle:hover {{
-                background-color: {border_color};
-                border-radius: 4px;
-            }}
-        """
-        self.main_splitter.setStyleSheet(splitter_style)
-        self.left_splitter.setStyleSheet(splitter_style)
 
         # Web视图
         webview_style = f"""
@@ -1109,6 +1265,7 @@ class MainWindow(FluentWindow):
 
     def _execute_task(self, task_type, *args, generate_graph=False, graph_name=None):
         base_cmd = self._core_command(task_type, *args)
+        self.switchTo(self.results_interface)
         self.task_handler.execute_command(
             base_cmd,
             task_type=task_type,
@@ -1127,6 +1284,7 @@ class MainWindow(FluentWindow):
         base_cmd = self._core_command("flow-sort", "--sort-type", sort_type)
         if sort_type == "outratio":
             base_cmd += ["--ratio-threshold", str(self.flow_sort_tab.ratio_threshold_spin.value())]
+        self.switchTo(self.results_interface)
         self.task_handler.execute_command(base_cmd, task_type="flow-sort", generate_graph=False)
 
     def run_path_searching(self):
@@ -1140,6 +1298,7 @@ class MainWindow(FluentWindow):
             return
         if self.path_tab.compare_checkbox.isChecked():
             base_cmd = self._core_command("compare-paths", "--src", src, "--dst", dst)
+            self.switchTo(self.results_interface)
             self.task_handler.execute_command(base_cmd, task_type="compare-paths", generate_graph=True,
                                               graph_name="compare_paths")
         else:
