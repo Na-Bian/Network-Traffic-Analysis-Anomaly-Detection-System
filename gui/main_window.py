@@ -1304,20 +1304,6 @@ class MainWindow(FluentWindow):
                 background-color: {hover_bg};
                 border-color: {accent};
             }}
-            QMenu {{
-                background-color: {surface_color};
-                color: {text_color};
-                border: 1px solid {border_color};
-                border-radius: 8px;
-                padding: 6px;
-            }}
-            QMenu::item {{
-                padding: 7px 28px 7px 14px;
-                border-radius: 6px;
-            }}
-            QMenu::item:selected {{
-                background-color: {hover_bg};
-            }}
             QGroupBox {{
                 background-color: {card_color};
                 color: {text_color};
