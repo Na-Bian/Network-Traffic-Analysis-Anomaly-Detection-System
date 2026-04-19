@@ -158,12 +158,17 @@ public:
 
         std::vector<std::future<Graph> > futures; //存储线程的future对象
 
-        const unsigned int base = linesCount / numThreads; //计算每个线程需要处理的行数
-        const unsigned int remainder = linesCount % numThreads; //计算余数
+        const unsigned int workerCount = std::min({
+            numThreads,
+            Graph::defaultThreadCount(),
+            (std::max)(1u, linesCount)
+        });
+        const unsigned int base = linesCount / workerCount; //计算每个线程需要处理的行数
+        const unsigned int remainder = linesCount % workerCount; //计算余数
 
         //分块并行读取和处理CSV文件
         unsigned int firstLineInChunk = 2;
-        for (unsigned int i = 0; i < numThreads; ++i) {
+        for (unsigned int i = 0; i < workerCount; ++i) {
             const unsigned int linesToRead = (i < remainder) ? base + 1 : base; //前remainder个线程处理base+1行，其他线程处理base行
             if (linesToRead == 0) continue;
             const unsigned int chunkFirstLine = firstLineInChunk;

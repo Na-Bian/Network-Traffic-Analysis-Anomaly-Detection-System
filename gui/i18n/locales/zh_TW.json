@@ -212,7 +212,7 @@
   "display_html_success": "子圖已載入……",
   "display_html_failed_try_browser": "載入 HTML 失敗: {}，正在使用系統瀏覽器開啟",
   "display_html_opened_in_browser": "子圖已在系統瀏覽器中開啟",
-  "about_content": "網路流量分析與異常檢測系統\n華中科技大學網路空間安全學院 - 程式設計綜合課程設計\n版本 1.0 | 2026年3月\n基於C++和PyQt6\n ©2026 那，邊。版權所有。",
+  "about_content": "網路流量分析與異常檢測系統\n華中科技大學網路空間安全學院 - 程式設計綜合課程設計\n版本 2.0 | 2026年4月\n基於C++和PyQt6\n ©2026 那，邊。版權所有。",
   "path_search_warning_title": "警告",
   "path_search_need_src_dst": "請輸入來源IP和目的IP",
   "ddos_warning_title": "警告",

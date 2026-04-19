@@ -208,7 +208,7 @@
   "display_html_success": "Subgraph loaded...",
   "display_html_failed_try_browser": "Failed to load HTML: {}, opening in system browser",
   "display_html_opened_in_browser": "Subgraph opened in system browser",
-  "about_content": "Network Traffic Analysis and Anomaly Detection System\nSchool of Cyber Science and Engineering, Huazhong University of Science and Technology - Comprehensive Programming Course Design\nVersion 1.0 | March 2026\nBased on C++ and PyQt6\n ©2026 Na, Bian. All rights reserved.",
+  "about_content": "Network Traffic Analysis and Anomaly Detection System\nSchool of Cyber Science and Engineering, Huazhong University of Science and Technology - Comprehensive Programming Course Design\nVersion 2.0 | April 2026\nBased on C++ and PyQt6\n ©2026 Na, Bian. All rights reserved.",
   "path_search_warning_title": "Warning",
   "path_search_need_src_dst": "Please enter source IP and destination IP",
   "ddos_warning_title": "Warning",

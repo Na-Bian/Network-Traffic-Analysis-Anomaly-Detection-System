@@ -187,8 +187,12 @@ set<DDoSTarget> Graph::detectDDoSTargets(const int sourceThreshold,
 
 //分析图中所有节点的邻居信息
 vector<unordered_map<int, NeighborInfo> > Graph::analyzeNeighbors(const unsigned int numThreads) const {
-    const unsigned int threadCount = numThreads == 0 ? 1 : numThreads;
     const int n = verticesList.getVertexCount(); // 获取节点数量
+    const unsigned int threadCount = std::min({
+        numThreads == 0 ? 1u : numThreads,
+        defaultThreadCount(),
+        (std::max)(1u, static_cast<unsigned int>(n))
+    });
     //创建一个列表用于存储每个节点的邻居信息，邻居信息以字典形式存储，
     //键为邻居节点索引，值为一个结构体，包含与邻居节点通信使用过的源端口号集合、目的端口号集合和总流量
     vector<unordered_map<int, NeighborInfo> > neighbors(n);

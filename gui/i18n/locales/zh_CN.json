@@ -208,7 +208,7 @@
   "display_html_success": "子图已加载……",
   "display_html_failed_try_browser": "加载 HTML 失败: {}，正在使用系统浏览器打开",
   "display_html_opened_in_browser": "子图已在系统浏览器中打开",
-  "about_content": "网络流量分析与异常检测系统\n华中科技大学网络空间安全学院 - 程序设计综合课程设计\n版本 1.0 | 2026年3月\n基于C++和PyQt6\n ©2026 那，边。版权所有。",
+  "about_content": "网络流量分析与异常检测系统\n华中科技大学网络空间安全学院 - 程序设计综合课程设计\n版本 2.0 | 2026年4月\n基于C++和PyQt6\n ©2026 那，边。版权所有。",
   "path_search_warning_title": "警告",
   "path_search_need_src_dst": "请输入源IP和目的IP",
   "ddos_warning_title": "警告",
