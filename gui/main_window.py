@@ -296,6 +296,7 @@ class MainWindow(FluentWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._refresh_titlebar_layout()
+        self._refresh_dashboard_headline_metrics()
 
     def center_on_screen(self):
         """Place the window at the center of the active screen on first launch."""
@@ -460,6 +461,7 @@ class MainWindow(FluentWindow):
         self._set_navigation_texts()
         self._refresh_quick_card_icons()
         self._refresh_compact_control_widths()
+        self._refresh_dashboard_headline_metrics()
 
         if not self.is_data_available:
             self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
@@ -679,6 +681,34 @@ class MainWindow(FluentWindow):
     def _set_dashboard_current_file(self, file_path=None):
         self.dashboard_current_file_name = os.path.basename(file_path) if file_path else None
         self._refresh_dashboard_file_caption()
+
+    def _refresh_dashboard_headline_metrics(self):
+        if not hasattr(self, "dashboard_headline_label"):
+            return
+
+        label = self.dashboard_headline_label
+        text = label.text().strip()
+        if not text:
+            return
+
+        available_width = label.maximumWidth()
+        if hasattr(self, "dashboard_hero_text_container") and self.dashboard_hero_text_container.width() > 0:
+            available_width = min(available_width, self.dashboard_hero_text_container.width())
+
+        base_size = 31 if lang_mgr.current_lang == "en_US" else 27
+        min_size = 24 if lang_mgr.current_lang == "en_US" else 22
+
+        font = label.font()
+        for point_size in range(base_size, min_size - 1, -1):
+            test_font = QFont(font)
+            test_font.setPointSize(point_size)
+            if QFontMetrics(test_font).horizontalAdvance(text) <= max(320, available_width):
+                label.setFont(test_font)
+                return
+
+        fallback_font = QFont(font)
+        fallback_font.setPointSize(min_size)
+        label.setFont(fallback_font)
 
     def _refresh_compact_control_widths(self):
         fm = self.fontMetrics()
@@ -1043,13 +1073,14 @@ class MainWindow(FluentWindow):
         hero_text_layout.setSpacing(10)
         hero_text_container = QWidget()
         hero_text_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        hero_text_container.setMaximumWidth(780)
+        hero_text_container.setMaximumWidth(800)
         hero_text_container.setLayout(hero_text_layout)
+        self.dashboard_hero_text_container = hero_text_container
         self.dashboard_kicker_label = CaptionLabel(tr("dashboard_kicker", "Network Analyzer"))
         self.dashboard_kicker_label.setObjectName("dashboardKicker")
         self.dashboard_headline_label = TitleLabel(tr("dashboard_headline", "分析网络流量，监测异常行为"))
         self.dashboard_headline_label.setWordWrap(True)
-        self.dashboard_headline_label.setMaximumWidth(860)
+        self.dashboard_headline_label.setMaximumWidth(880)
         self.dashboard_body_label = BodyLabel(tr(
             "dashboard_body",
             "从 PCAP 或 CSV 数据开始，自动生成拓扑、运行检测任务，并把结果导出到统一的结果中心。"
@@ -1065,8 +1096,8 @@ class MainWindow(FluentWindow):
 
         command_card = CardWidget()
         command_card.setObjectName("dashboardActionPanel")
-        command_card.setMinimumWidth(460)
-        command_card.setMaximumWidth(560)
+        command_card.setMinimumWidth(450)
+        command_card.setMaximumWidth(550)
         command_card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         command_layout = QVBoxLayout(command_card)
         command_layout.setContentsMargins(22, 20, 22, 20)
@@ -1127,6 +1158,7 @@ class MainWindow(FluentWindow):
 
         hero_layout.addWidget(command_card, 0)
         layout.addWidget(hero_card)
+        self._refresh_dashboard_headline_metrics()
 
         metric_layout = QHBoxLayout()
         metric_layout.setSpacing(16)
