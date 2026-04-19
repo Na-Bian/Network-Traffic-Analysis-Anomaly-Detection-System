@@ -12,22 +12,24 @@ class CustomRuleTab(QWidget):
         self.setObjectName("customRuleContent")
 
         layout = QGridLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setHorizontalSpacing(14)
-        layout.setVerticalSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setHorizontalSpacing(18)
+        layout.setVerticalSpacing(14)
 
         # 目标IP (行0)
         self.target_ip_label = BodyLabel()
+        self.target_ip_label.setMinimumWidth(130)
         layout.addWidget(self.target_ip_label, 0, 0)
         self.target_ip_edit = LineEdit()
         self.target_ip_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.target_ip_edit.setMinimumHeight(38)
         layout.addWidget(self.target_ip_edit, 0, 1, 1, 2)
 
         # IP范围组 (行1)
         self.range_group = QGroupBox()
         range_layout = QVBoxLayout(self.range_group)
         range_layout.setContentsMargins(18, 18, 18, 18)
-        range_layout.setSpacing(10)
+        range_layout.setSpacing(12)
 
         self.radio_cidr = RadioButton()
         self.radio_cidr.setChecked(True)
@@ -35,6 +37,7 @@ class CustomRuleTab(QWidget):
         range_layout.addWidget(self.radio_cidr)
 
         self.cidr_edit = LineEdit()
+        self.cidr_edit.setMinimumHeight(38)
         range_layout.addWidget(self.cidr_edit)
 
         self.radio_start_end = RadioButton()
@@ -42,16 +45,18 @@ class CustomRuleTab(QWidget):
 
         start_end_layout = QHBoxLayout()
         start_end_layout.setContentsMargins(0, 0, 0, 0)
-        start_end_layout.setSpacing(2)
+        start_end_layout.setSpacing(10)
         self.start_ip_edit = LineEdit()
         self.start_ip_edit.setEnabled(False)
         self.start_ip_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.start_ip_edit.setMinimumHeight(38)
         start_end_layout.addWidget(self.start_ip_edit)
         self.to_label = BodyLabel()
         start_end_layout.addWidget(self.to_label)
         self.end_ip_edit = LineEdit()
         self.end_ip_edit.setEnabled(False)
         self.end_ip_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.end_ip_edit.setMinimumHeight(38)
         start_end_layout.addWidget(self.end_ip_edit)
         range_layout.addLayout(start_end_layout)
 
@@ -61,39 +66,51 @@ class CustomRuleTab(QWidget):
         self.optional_group = QGroupBox()
         optional_layout = QGridLayout(self.optional_group)
         optional_layout.setContentsMargins(18, 18, 18, 18)
-        optional_layout.setHorizontalSpacing(14)
-        optional_layout.setVerticalSpacing(10)
+        optional_layout.setHorizontalSpacing(18)
+        optional_layout.setVerticalSpacing(12)
 
         # 协议类型
         self.protocol_label = BodyLabel()
+        self.protocol_label.setMinimumWidth(130)
         optional_layout.addWidget(self.protocol_label, 0, 0)
         self.protocol_edit = LineEdit()
         self.protocol_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.protocol_edit.setMinimumHeight(38)
         optional_layout.addWidget(self.protocol_edit, 0, 1)
 
         # 源端口
         self.src_port_label = BodyLabel()
+        self.src_port_label.setMinimumWidth(130)
         optional_layout.addWidget(self.src_port_label, 1, 0)
         self.src_port_edit = LineEdit()
         self.src_port_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.src_port_edit.setMinimumHeight(38)
         optional_layout.addWidget(self.src_port_edit, 1, 1)
 
         # 目的端口
         self.dst_port_label = BodyLabel()
+        self.dst_port_label.setMinimumWidth(130)
         optional_layout.addWidget(self.dst_port_label, 2, 0)
         self.dst_port_edit = LineEdit()
         self.dst_port_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.dst_port_edit.setMinimumHeight(38)
         optional_layout.addWidget(self.dst_port_edit, 2, 1)
 
         # 最大流量阈值
         self.max_traffic_label = BodyLabel()
+        self.max_traffic_label.setMinimumWidth(130)
         optional_layout.addWidget(self.max_traffic_label, 3, 0)
         max_traffic_hbox = QHBoxLayout()
+        max_traffic_hbox.setContentsMargins(0, 0, 0, 0)
+        max_traffic_hbox.setSpacing(10)
         self.max_traffic_edit = LineEdit()
         self.max_traffic_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.max_traffic_edit.setMinimumHeight(38)
         max_traffic_hbox.addWidget(self.max_traffic_edit)
 
         self.max_traffic_unit = ComboBox()
+        self.max_traffic_unit.setMinimumHeight(38)
+        self.max_traffic_unit.setMinimumWidth(92)
         self.max_traffic_unit.setCurrentIndex(1)
         max_traffic_hbox.addWidget(self.max_traffic_unit)
 
@@ -103,9 +120,11 @@ class CustomRuleTab(QWidget):
 
         # 规则类型 (行3)
         self.rule_type_label = BodyLabel()
+        self.rule_type_label.setMinimumWidth(130)
         layout.addWidget(self.rule_type_label, 3, 0)
         self.rule_type_combo = ComboBox()
         self.rule_type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.rule_type_combo.setMinimumHeight(38)
         layout.addWidget(self.rule_type_combo, 3, 1, 1, 2)
 
         self.rule_semantics_label = BodyLabel()
@@ -115,6 +134,7 @@ class CustomRuleTab(QWidget):
         # 检测按钮 (行5)
         self.detect_btn = PrimaryPushButton()
         self.detect_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.detect_btn.setMinimumHeight(40)
         layout.addWidget(self.detect_btn, 5, 0, 1, 3)
 
         layout.setColumnStretch(1, 1)

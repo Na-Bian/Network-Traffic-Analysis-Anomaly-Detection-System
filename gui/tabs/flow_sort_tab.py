@@ -10,22 +10,27 @@ class FlowSortTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QGridLayout(self)
-        layout.setContentsMargins(3, 3, 3, 3)
-        layout.setSpacing(3)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setHorizontalSpacing(18)
+        layout.setVerticalSpacing(14)
 
         self.sort_type_label = BodyLabel()
+        self.sort_type_label.setMinimumWidth(130)
         layout.addWidget(self.sort_type_label, 0, 0)
         self.sort_type_combo = ComboBox()
         self.sort_type_combo.currentTextChanged.connect(self.on_sort_type_changed)
         self.sort_type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.sort_type_combo.setMinimumHeight(38)
         layout.addWidget(self.sort_type_combo, 0, 1)
 
         self.ratio_label = BodyLabel()
+        self.ratio_label.setMinimumWidth(130)
         self.ratio_threshold_spin = DoubleSpinBox()
         self.ratio_threshold_spin.setRange(0.0, 1.0)
         self.ratio_threshold_spin.setValue(0.8)
         self.ratio_threshold_spin.setSingleStep(0.05)
         self.ratio_threshold_spin.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.ratio_threshold_spin.setMinimumHeight(38)
         self.ratio_label.setVisible(False)
         self.ratio_threshold_spin.setVisible(False)
         layout.addWidget(self.ratio_label, 1, 0)
@@ -33,6 +38,7 @@ class FlowSortTab(QWidget):
 
         self.flow_sort_btn = PrimaryPushButton()
         self.flow_sort_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.flow_sort_btn.setMinimumHeight(40)
         layout.addWidget(self.flow_sort_btn, 2, 0, 1, 2)
 
         layout.setColumnStretch(1, 1)

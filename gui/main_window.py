@@ -807,7 +807,7 @@ class MainWindow(FluentWindow):
     def _build_feature_page(self, page, widget, title):
         card = HeaderCardWidget()
         card.setTitle(title)
-        card.viewLayout.setContentsMargins(16, 12, 16, 16)
+        card.viewLayout.setContentsMargins(22, 18, 22, 20)
         card.viewLayout.addWidget(widget)
         page.page_layout.addWidget(card)
         page.page_layout.addStretch()
