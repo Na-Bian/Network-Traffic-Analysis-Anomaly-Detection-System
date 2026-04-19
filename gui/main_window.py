@@ -1356,14 +1356,14 @@ class MainWindow(FluentWindow):
                 border: 1px solid {border_color};
                 border-radius: 8px;
             }}
-            QToolButton {{
+            CommandBar QToolButton {{
                 background-color: {card_color};
                 color: {text_color};
                 border: 1px solid {border_color};
                 border-radius: 6px;
                 padding: 7px 12px;
             }}
-            QToolButton:hover {{
+            CommandBar QToolButton:hover {{
                 background-color: {hover_bg};
                 border-color: {accent};
             }}
