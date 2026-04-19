@@ -871,7 +871,9 @@ class MainWindow(FluentWindow):
     def _apply_window_effects(self):
         """Enable Win11 shell effects while keeping a solid fallback on older systems."""
         is_win11 = sys.platform == "win32" and sys.getwindowsversion().build >= 22000
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, is_win11)
+        # Do not enable WA_TranslucentBackground here. It breaks qfluentwidgets popup
+        # layers (ComboBox/RoundMenu) on some Windows + QtWebEngine combinations.
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setMicaEffectEnabled(is_win11)
 
         if not is_win11:
