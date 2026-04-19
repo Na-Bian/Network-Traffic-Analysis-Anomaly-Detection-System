@@ -27,6 +27,7 @@ from qfluentwidgets import (
     Pivot,
     PrimaryPushButton,
     PushButton,
+    RoundMenu,
     ScrollArea,
     SpinBox as FluentSpinBox,
     StrongBodyLabel,
@@ -369,27 +370,32 @@ class MainWindow(FluentWindow):
 
         self.file_menu.addSeparator()
 
-        self.export_menu = self.file_menu.addMenu(tr("export_menu", "导出"))
+        self.export_menu = RoundMenu(tr("export_menu", "导出"), self)
+        self.file_menu.addMenu(self.export_menu)
 
         self.export_pcap_csv_action = QAction(tr("export_pcap_csv", "PCAP转换的CSV"), self)
         self.export_pcap_csv_action.triggered.connect(self.export_pcap_csv)
         self.export_menu.addAction(self.export_pcap_csv_action)
 
-        self.full_graph_menu = self.export_menu.addMenu(tr("task_full_graph", "全网拓扑"))
+        self.full_graph_menu = RoundMenu(tr("task_full_graph", "全网拓扑"), self)
+        self.full_graph_menu.setIcon(FIF.GLOBE)
         self.export_full_graph_json_action = QAction("JSON", self)
         self.export_full_graph_json_action.triggered.connect(lambda: self.export_graph("full", "json"))
         self.full_graph_menu.addAction(self.export_full_graph_json_action)
         self.export_full_graph_html_action = QAction("HTML", self)
         self.export_full_graph_html_action.triggered.connect(lambda: self.export_graph("full", "html"))
         self.full_graph_menu.addAction(self.export_full_graph_html_action)
+        self.export_menu.addMenu(self.full_graph_menu)
 
-        self.subgraph_menu = self.export_menu.addMenu(tr("export_current_subgraph", "当前子图"))
+        self.subgraph_menu = RoundMenu(tr("export_current_subgraph", "当前子图"), self)
+        self.subgraph_menu.setIcon(FIF.SHARE)
         self.export_subgraph_json_action = QAction("JSON", self)
         self.export_subgraph_json_action.triggered.connect(lambda: self.export_graph("current", "json"))
         self.subgraph_menu.addAction(self.export_subgraph_json_action)
         self.export_subgraph_html_action = QAction("HTML", self)
         self.export_subgraph_html_action.triggered.connect(lambda: self.export_graph("current", "html"))
         self.subgraph_menu.addAction(self.export_subgraph_html_action)
+        self.export_menu.addMenu(self.subgraph_menu)
 
         # 初始时禁用所有导出动作，直到数据加载
         self.update_export_actions()
