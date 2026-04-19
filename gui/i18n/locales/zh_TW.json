@@ -1,5 +1,8 @@
 {
   "app_title": "網路流量分析與異常偵測系統",
+  "app_title_short": "網路流量分析",
+  "app_subtitle": "拓撲視覺化、異常偵測與路徑分析工作台",
+  "nav_workbench": "工作台",
   "waiting_data": "等待分析資料...",
   "waiting_data_loading": "等待資料加載...",
   "warning": "警告",

@@ -1,5 +1,8 @@
 {
   "app_title": "Network Traffic Analysis and Anomaly Detection System",
+  "app_title_short": "Network Analysis",
+  "app_subtitle": "Topology visualization, anomaly detection, and path analysis workbench",
+  "nav_workbench": "Workbench",
   "waiting_data": "Waiting for data analysis...",
   "waiting_data_loading": "Waiting for data loading...",
   "warning": "Warning",

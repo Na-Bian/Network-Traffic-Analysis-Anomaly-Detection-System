@@ -8,6 +8,21 @@ from PyQt6.QtGui import *
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import *
+from qfluentwidgets import (
+    BodyLabel,
+    CardWidget,
+    CheckBox as FluentCheckBox,
+    ComboBox as FluentComboBox,
+    FluentIcon as FIF,
+    FluentWindow,
+    LineEdit as FluentLineEdit,
+    PrimaryPushButton,
+    PushButton,
+    SpinBox as FluentSpinBox,
+    SubtitleLabel,
+    isDarkTheme,
+    qconfig,
+)
 
 from .html_helper import get_theme_colors, generate_placeholder_html, replace_cdn_with_local
 from .tabs.anomaly_tabs import AnomalyTab
@@ -155,9 +170,13 @@ def _generate_manual_theme_style(is_dark: bool) -> str:
         """
 
 
-class MainWindow(QMainWindow):
+class MainWindow(FluentWindow):
     def __init__(self):
+        qconfig.set(qconfig.fontFamilies, ["Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Segoe UI"])
         super().__init__()
+        self.setObjectName("NetworkAnalyzerWindow")
+        self.setFont(QFont("Microsoft YaHei UI", 10))
+        self.workbench_interface = None
         self.web_view = None
         self.setWindowTitle(tr("app_title", "网络流量分析与异常检测系统"))
         self.resize(1280, 800)
@@ -257,6 +276,12 @@ class MainWindow(QMainWindow):
         self.help_menu.setTitle(tr("help", "帮助"))
         self.manual_action.setText(tr("help_manual", "用户手册"))
         self.about_action.setText(tr("about", "关于"))
+        self.app_title_label.setText(tr("app_title_short", "网络流量分析"))
+        self.app_subtitle_label.setText(tr("app_subtitle", "拓扑可视化、异常检测与路径分析工作台"))
+        self.open_btn.setText(tr("open_file", "打开数据文件"))
+        self.export_btn.setText(tr("export_menu", "导出"))
+        self.lang_btn.setText(tr("language", "语言 / Language"))
+        self.help_btn.setText(tr("help", "帮助"))
         self.thread_label.setText(tr("thread_count", "线程数:"))
         self.data_file_label.setText(tr("data_file", "数据文件:"))
         self.browse_btn.setText(tr("browse", "浏览..."))
@@ -291,16 +316,19 @@ class MainWindow(QMainWindow):
         self.output_tabs.setTabText(0, tr("output_log_tab", "⚙️ 运行日志"))
         self.output_tabs.setTabText(1, tr("output_table_tab", "📊 数据表格"))
         self.output_tabs.setTabText(2, tr("output_detail_tab", "🗺️ 路径与详情"))
+        nav_item = self.navigationInterface.widget(self.workbench_interface.objectName())
+        if nav_item and hasattr(nav_item, "setText"):
+            nav_item.setText(tr("nav_workbench", "工作台"))
 
         if not self.is_data_available:
             self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
 
     def init_ui(self):
         """初始化所有UI组件"""
-        menubar = self.menuBar()
+        self.setMicaEffectEnabled(True)
 
-        # 文件菜单
-        self.file_menu = menubar.addMenu(tr("file", "文件"))
+        # 文件与导出动作
+        self.file_menu = QMenu(tr("file", "文件"), self)
         self.open_action = QAction(tr("open_file", "打开数据文件"), self)
         self.open_action.triggered.connect(self.browse_file)
         self.file_menu.addAction(self.open_action)
@@ -332,25 +360,9 @@ class MainWindow(QMainWindow):
         # 初始时禁用所有导出动作，直到数据加载
         self.update_export_actions()
 
-        # 设置菜单
-        self.settings_menu = menubar.addMenu(tr("settings", "设置"))
-        thread_widget = QWidget()
-        thread_layout = QHBoxLayout(thread_widget)
-        thread_layout.setContentsMargins(0, 0, 0, 0)
-        self.thread_label = QLabel(tr("thread_count", "线程数:"))
-        thread_layout.addWidget(self.thread_label)
-        self.thread_spin = QSpinBox()
-        self.thread_spin.setRange(1, 4 if os.cpu_count() >= 4 else os.cpu_count())  # 默认使用4线程
-        self.thread_spin.setValue(os.cpu_count())
-        thread_layout.addWidget(self.thread_spin)
-        thread_layout.addStretch()
-        thread_action = QWidgetAction(self)
-        thread_action.setDefaultWidget(thread_widget)
-        self.settings_menu.addAction(thread_action)
-        self.settings_menu.addSeparator()
-
         # 语言子菜单
-        self.lang_menu = self.settings_menu.addMenu(tr("language", "语言 / Language"))
+        self.settings_menu = QMenu(tr("settings", "设置"), self)
+        self.lang_menu = QMenu(tr("language", "语言 / Language"), self)
         self.action_zh_cn = QAction(tr("lang_zh_CN", "简体中文"), self)
         self.action_zh_cn.triggered.connect(lambda: lang_mgr.set_language("zh_CN"))
         self.lang_menu.addAction(self.action_zh_cn)
@@ -360,9 +372,10 @@ class MainWindow(QMainWindow):
         self.action_en = QAction(tr("lang_en_US", "English"), self)
         self.action_en.triggered.connect(lambda: lang_mgr.set_language("en_US"))
         self.lang_menu.addAction(self.action_en)
+        self.settings_menu.addMenu(self.lang_menu)
 
         # 帮助菜单
-        self.help_menu = menubar.addMenu(tr("help", "帮助"))
+        self.help_menu = QMenu(tr("help", "帮助"), self)
         self.manual_action = QAction(tr("help_manual", "用户手册"), self)
         self.manual_action.triggered.connect(self.show_manual)
         self.about_action = QAction(tr("about", "关于"), self)
@@ -370,40 +383,95 @@ class MainWindow(QMainWindow):
         self.help_menu.addAction(self.manual_action)
         self.help_menu.addAction(self.about_action)
 
-        # 中央部件
-        central = QWidget()
-        self.setCentralWidget(central)
-        self.main_layout = QVBoxLayout(central)
-        self.main_layout.setSpacing(5)
-        self.main_layout.setContentsMargins(5, 5, 5, 5)
+        # Fluent 工作台页
+        self.workbench_interface = QWidget(self)
+        self.workbench_interface.setObjectName("workbench")
+        self.addSubInterface(self.workbench_interface, FIF.HOME, tr("nav_workbench", "工作台"))
 
-        # 文件选择行
+        self.main_layout = QVBoxLayout(self.workbench_interface)
+        self.main_layout.setSpacing(12)
+        self.main_layout.setContentsMargins(18, 12, 18, 18)
+
+        # 顶部操作区
+        header_card = CardWidget()
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(18, 14, 18, 14)
+        header_layout.setSpacing(10)
+
+        title_row = QHBoxLayout()
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        self.app_title_label = SubtitleLabel(tr("app_title_short", "网络流量分析"))
+        self.app_subtitle_label = BodyLabel(tr("app_subtitle", "拓扑可视化、异常检测与路径分析工作台"))
+        title_col.addWidget(self.app_title_label)
+        title_col.addWidget(self.app_subtitle_label)
+        title_row.addLayout(title_col)
+        title_row.addStretch()
+
+        self.open_btn = PrimaryPushButton(FIF.FOLDER, tr("open_file", "打开数据文件"))
+        self.open_btn.clicked.connect(self.browse_file)
+        title_row.addWidget(self.open_btn)
+
+        self.export_btn = QToolButton()
+        self.export_btn.setText(tr("export_menu", "导出"))
+        self.export_btn.setIcon(FIF.SAVE.icon())
+        self.export_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.export_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.export_btn.setMenu(self.export_menu)
+        title_row.addWidget(self.export_btn)
+
+        self.lang_btn = QToolButton()
+        self.lang_btn.setText(tr("language", "语言 / Language"))
+        self.lang_btn.setIcon(FIF.LANGUAGE.icon())
+        self.lang_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.lang_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.lang_btn.setMenu(self.lang_menu)
+        title_row.addWidget(self.lang_btn)
+
+        self.help_btn = QToolButton()
+        self.help_btn.setText(tr("help", "帮助"))
+        self.help_btn.setIcon(FIF.HELP.icon())
+        self.help_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.help_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.help_btn.setMenu(self.help_menu)
+        title_row.addWidget(self.help_btn)
+        header_layout.addLayout(title_row)
+
         file_layout = QHBoxLayout()
-        self.data_file_label = QLabel(tr("data_file", "数据文件:"))
+        file_layout.setSpacing(10)
+        self.data_file_label = BodyLabel(tr("data_file", "数据文件:"))
         file_layout.addWidget(self.data_file_label)
-        self.file_edit = QLineEdit()
+        self.file_edit = FluentLineEdit()
         self.file_edit.setReadOnly(True)
         file_layout.addWidget(self.file_edit)
-        self.browse_btn = QPushButton(tr("browse", "浏览..."))
+        self.browse_btn = PushButton(tr("browse", "浏览..."))
         self.browse_btn.clicked.connect(self.browse_file)
         file_layout.addWidget(self.browse_btn)
-        file_layout.addStretch()
-        self.main_layout.addLayout(file_layout)
+
+        self.thread_label = BodyLabel(tr("thread_count", "线程数:"))
+        file_layout.addWidget(self.thread_label)
+        self.thread_spin = FluentSpinBox()
+        self.thread_spin.setRange(1, 4 if os.cpu_count() >= 4 else os.cpu_count())
+        self.thread_spin.setValue(os.cpu_count())
+        self.thread_spin.setFixedWidth(92)
+        file_layout.addWidget(self.thread_spin)
+        header_layout.addLayout(file_layout)
 
         # 渲染配置行
         render_layout = QHBoxLayout()
-        self.render_mode_label = QLabel(tr("render_mode_label", "渲染模式:"))
+        render_layout.setSpacing(10)
+        self.render_mode_label = BodyLabel(tr("render_mode_label", "渲染模式:"))
         render_layout.addWidget(self.render_mode_label)
-        self.render_mode_combo = QComboBox()
+        self.render_mode_combo = FluentComboBox()
         self.render_mode_combo.addItem(tr("render_mode_auto", "自动"), "auto")
         self.render_mode_combo.addItem(tr("render_mode_vis", "vis-network"), "vis")
         self.render_mode_combo.addItem(tr("render_mode_sigma", "Sigma"), "sigma")
         self.render_mode_combo.setMinimumWidth(130)
         render_layout.addWidget(self.render_mode_combo)
 
-        self.top_k_edges_label = QLabel(tr("render_top_k_edges_label", "Top-K 边:"))
+        self.top_k_edges_label = BodyLabel(tr("render_top_k_edges_label", "Top-K 边:"))
         render_layout.addWidget(self.top_k_edges_label)
-        self.top_k_edges_spin = QSpinBox()
+        self.top_k_edges_spin = FluentSpinBox()
         self.top_k_edges_spin.setRange(0, 1000000)
         self.top_k_edges_spin.setSingleStep(1000)
         self.top_k_edges_spin.setSpecialValueText(tr("render_top_k_edges_unlimited", "不限"))
@@ -413,7 +481,7 @@ class MainWindow(QMainWindow):
         ))
         render_layout.addWidget(self.top_k_edges_spin)
 
-        self.aggregate_graph_checkbox = QCheckBox(tr("render_aggregate_large_graph", "超大图按 /24 网段聚合"))
+        self.aggregate_graph_checkbox = FluentCheckBox(tr("render_aggregate_large_graph", "超大图按 /24 网段聚合"))
         self.aggregate_graph_checkbox.setChecked(True)
         self.aggregate_graph_checkbox.setToolTip(tr(
             "render_aggregate_large_graph_tooltip",
@@ -421,7 +489,8 @@ class MainWindow(QMainWindow):
         ))
         render_layout.addWidget(self.aggregate_graph_checkbox)
         render_layout.addStretch()
-        self.main_layout.addLayout(render_layout)
+        header_layout.addLayout(render_layout)
+        self.main_layout.addWidget(header_card)
 
         # 主分割器
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -837,41 +906,89 @@ class MainWindow(QMainWindow):
 
     def update_log_detail_theme(self):
         bg_color, text_color = get_theme_colors()
-        border_color = "#444444" if bg_color == "#222222" else "#cccccc"
-        header_bg = "#3a3a3a" if bg_color == "#222222" else "#e0e0e0"
-        alt_bg = "#333333" if bg_color == "#222222" else "#f8f8f8"
+        dark = isDarkTheme()
+        surface_color = "#2b2b2b" if dark else "#ffffff"
+        card_color = "#323232" if dark else "#f7f9fc"
+        border_color = "#4a4a4a" if dark else "#d8dce5"
+        header_bg = "#3a3a3a" if dark else "#eef3fb"
+        alt_bg = "#303030" if dark else "#f8fbff"
+        hover_bg = "#3d3d3d" if dark else "#eef6ff"
+        accent = "#0078d4"
+
+        self.setStyleSheet(f"""
+            #NetworkAnalyzerWindow {{
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+            #workbench {{
+                background-color: transparent;
+            }}
+            CardWidget {{
+                background-color: {surface_color};
+                border: 1px solid {border_color};
+                border-radius: 8px;
+            }}
+            QToolButton {{
+                background-color: {card_color};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 6px;
+                padding: 7px 12px;
+            }}
+            QToolButton:hover {{
+                background-color: {hover_bg};
+                border-color: {accent};
+            }}
+            QMenu {{
+                background-color: {surface_color};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 8px;
+                padding: 6px;
+            }}
+            QMenu::item {{
+                padding: 7px 28px 7px 14px;
+                border-radius: 6px;
+            }}
+            QMenu::item:selected {{
+                background-color: {hover_bg};
+            }}
+        """)
 
         # 运行日志
         self.log_text.setStyleSheet(f"""
             QTextEdit {{    
-                background-color: {bg_color}; color: {text_color}; border: 1px solid {border_color};
+                background-color: {surface_color}; color: {text_color}; border: 1px solid {border_color};
+                border-radius: 8px; padding: 6px;
                 font-family: Consolas, monospace; font-size: 12px;
             }}
-            QTextEdit::selection {{ background-color: #4a6cf7; color: white; }}
+            QTextEdit::selection {{ background-color: {accent}; color: white; }}
         """)
 
         # 路径详情
         self.result_detail.setStyleSheet(f"""
             QTextBrowser {{
-                background-color: {bg_color}; color: {text_color}; border: 1px solid {border_color};
+                background-color: {surface_color}; color: {text_color}; border: 1px solid {border_color};
+                border-radius: 8px; padding: 6px;
                 font-family: Consolas, monospace; font-size: 13px;
             }}
-            QTextBrowser::selection {{ background-color: #4a6cf7; color: white; }}
+            QTextBrowser::selection {{ background-color: {accent}; color: white; }}
         """)
 
         # 数据表格
         self.result_table.setStyleSheet(f"""
             QTableWidget {{
-                background-color: {bg_color}; color: {text_color};
+                background-color: {surface_color}; color: {text_color};
                 border: 1px solid {border_color}; gridline-color: {border_color};
+                border-radius: 8px;
                 alternate-background-color: {alt_bg};
             }}
-            QTableWidget::item {{ background-color: {bg_color}; color: {text_color}; padding: 4px; }}
+            QTableWidget::item {{ background-color: {surface_color}; color: {text_color}; padding: 6px; }}
             QTableWidget::item:alternate {{ background-color: {alt_bg}; }}
-            QTableWidget::item:selected {{ background-color: #4a6cf7; color: white; }}
+            QTableWidget::item:selected {{ background-color: {accent}; color: white; }}
             QHeaderView::section {{
                 background-color: {header_bg}; color: {text_color};
-                border: 1px solid {border_color}; padding: 4px;
+                border: none; border-bottom: 1px solid {border_color}; padding: 7px;
             }}
         """)
         self.result_table.setAlternatingRowColors(True)
@@ -880,21 +997,24 @@ class MainWindow(QMainWindow):
         self.tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: 1px solid {border_color};
-                background-color: {bg_color};
+                background-color: {surface_color};
+                border-radius: 8px;
+                top: -1px;
             }}
             QTabBar::tab {{
-                background-color: {bg_color};
+                background-color: transparent;
                 color: {text_color};
-                border: 1px solid {border_color};
-                border-radius: 4px;     
-                padding: 4px 10px;       
-                margin-right: 2px;   
+                border: none;
+                border-radius: 6px;
+                padding: 7px 12px;
+                margin-right: 4px;
             }}
             QTabBar::tab:selected {{
                 background-color: {header_bg};
+                color: {accent};
             }}
             QTabBar::tab:hover {{
-                background-color: {border_color};
+                background-color: {hover_bg};
             }}
         """)
 
@@ -902,36 +1022,42 @@ class MainWindow(QMainWindow):
         self.output_tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: 1px solid {border_color};
-                background-color: {bg_color};
+                background-color: {surface_color};
+                border-radius: 8px;
+                top: -1px;
             }}
             QTabBar::tab {{
-                background-color: {bg_color};
+                background-color: transparent;
                 color: {text_color};
-                border: 1px solid {border_color};
-                border-radius: 4px;
-                padding: 4px 10px;
-                margin-right: 2px;
+                border: none;
+                border-radius: 6px;
+                padding: 7px 12px;
+                margin-right: 4px;
             }}
             QTabBar::tab:selected {{
                 background-color: {header_bg};
+                color: {accent};
             }}
             QTabBar::tab:hover {{
-                background-color: {border_color};
+                background-color: {hover_bg};
             }}
         """)
 
         # 分割器
         splitter_style = f"""
             QSplitter {{
-                background-color: {bg_color};
+                background-color: transparent;
                 border: none;
-                border-radius: 8px; 
                 padding: 0px; 
             }}
             QSplitter::handle {{
+                background-color: transparent;
+                width: 8px;
+                height: 8px;
+            }}
+            QSplitter::handle:hover {{
                 background-color: {border_color};
-                width: 2px;
-                height: 2px;
+                border-radius: 4px;
             }}
         """
         self.main_splitter.setStyleSheet(splitter_style)
@@ -940,8 +1066,9 @@ class MainWindow(QMainWindow):
         # Web视图
         webview_style = f"""
             QWebEngineView {{
-                background-color: {bg_color};
-                border: none;
+                background-color: {surface_color};
+                border: 1px solid {border_color};
+                border-radius: 8px;
                 outline: none;
                 margin: 0px;
                 padding: 0px;

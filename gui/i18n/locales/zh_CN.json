@@ -1,5 +1,8 @@
 {
   "app_title": "网络流量分析与异常检测系统",
+  "app_title_short": "网络流量分析",
+  "app_subtitle": "拓扑可视化、异常检测与路径分析工作台",
+  "nav_workbench": "工作台",
   "waiting_data": "等待分析数据...",
   "waiting_data_loading": "等待数据加载...",
   "warning": "警告",
