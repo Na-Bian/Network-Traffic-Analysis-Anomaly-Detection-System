@@ -236,6 +236,7 @@ class MainWindow(FluentWindow):
 
         self.current_html_original_path = None  # 当前显示子图的原始HTML
         self.current_html_display_path = None  # 当前显示子图的显示HTML，将CDN替换为本地资源
+        self.quick_card_icons = []
 
         # 导出 actions
         self.export_pcap_csv_action = None
@@ -417,6 +418,7 @@ class MainWindow(FluentWindow):
             self.theme_combo.setItemText(1, tr("settings_theme_light", "浅色"))
             self.theme_combo.setItemText(2, tr("settings_theme_dark", "深色"))
         self._set_navigation_texts()
+        self._refresh_quick_card_icons()
 
         if not self.is_data_available:
             self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
@@ -591,9 +593,10 @@ class MainWindow(FluentWindow):
         layout.setSpacing(14)
 
         icon_label = QLabel()
-        icon_label.setPixmap(icon.icon().pixmap(30, 30))
+        icon_label.setFixedSize(36, 36)
         icon_label.setFixedWidth(36)
         layout.addWidget(icon_label)
+        self.quick_card_icons.append((icon_label, icon))
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(3)
@@ -609,6 +612,11 @@ class MainWindow(FluentWindow):
         layout.addWidget(button)
         parent_layout.addWidget(card)
         return card
+
+    def _refresh_quick_card_icons(self):
+        theme = Theme.DARK if isDarkTheme() else Theme.LIGHT
+        for label, icon in self.quick_card_icons:
+            label.setPixmap(icon.icon(theme=theme).pixmap(30, 30))
 
     def _build_fluent_pages(self):
         self.workbench_interface = self._create_page(
@@ -915,6 +923,7 @@ class MainWindow(FluentWindow):
         self._apply_window_effects()
         self.update_webview_theme()
         self.update_log_detail_theme()
+        self._refresh_quick_card_icons()
         QApplication.style().unpolish(self)
         QApplication.style().polish(self)
         self.update()
