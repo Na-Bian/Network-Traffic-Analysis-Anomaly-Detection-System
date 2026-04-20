@@ -226,20 +226,17 @@
     <div class="container">
         <h1>網路流量分析與異常檢測系統</h1>
         <p class="subtitle">華中科技大學網路空間安全學院 - 程式設計綜合課程設計</p>
-        <div class="version">版本 2.0 | 2026年4月</div>
+        <div class="version">版本 2.1 | 2026年4月</div>
 
         <h2>📖 1. 系統簡介</h2>
         <p>本系統是華中科技大學網路空間安全學院《程式設計綜合課程設計》課程的實踐成果，旨在將電腦網路、資料結構、演算法設計與 C++/Python 程式設計等理論知識綜合應用於貼近工程實際的網路安全分析場景。面對日益複雜的網路攻擊手段，對海量流量進行即時監控與智慧分析已成為保障網路穩定運行的關鍵。本系統緊扣實際需求，能夠高效處理真實的網路會話數據，自動建構網路拓撲模型，並整合流量統計、行為分析、異常檢測與結果視覺化等一系列功能，為網路管理員和安全分析師提供直觀、高效的一體化分析工具。
         </p>
 
         <div class="tip">
-            <strong>🆕 2.0 更新重點</strong>
+            <strong>🆕 2.1 更新重點</strong>
             <ul style="margin-top: 8px;">
-                <li><strong>介面全面升級</strong>：重構為 Win11 Fluent 風格多頁面佈局，支援淺色/深色主題、自適應標題列、側邊導覽與更清晰的結果頁聯動。</li>
-                <li><strong>視覺化最佳化</strong>：新增 Sigma/WebGL 渲染器與效能模式，大規模網路拓撲會自動採用更合適的渲染方案。</li>
-                <li><strong>異常檢測增強</strong>：端口掃描、DDoS 目標、自訂規則檢測補充更多閾值與方向判斷，結果表格和異常子圖更加完整。</li>
-                <li><strong>路徑分析最佳化</strong>：新增最小風險路徑與三策略對比，支援最大輸出路徑數限制，避免等價路徑過多影響效能。</li>
-                <li><strong>資料讀取與執行穩定性最佳化</strong>：CSV 讀取增加欄位校驗、執行緒數自適應收斂和後端執行檔同步，減少高執行緒數帶來的調度開銷。</li>
+                <li><strong>MS Fluent 介面更新</strong>：主視窗升級為 MSFluentWindow，側邊導覽、標題列返回鍵、首頁工作台與控制項排版進一步統一。</li>
+                <li><strong>工作台體驗最佳化</strong>：開始分析入口現在更加突出，匯入、匯出和幫助入口更集中。</li>
             </ul>
         </div>
 
@@ -282,9 +279,10 @@
         <div class="note">
             <strong>🛠️ 開發環境與程式語言</strong>
             <ul style="margin-top: 8px;">
-                <li><strong>C++ 核心後端</strong>：使用 CLion 2025.3.3 開發，採用 <code>C++23</code> 標準，最終二進位檔案由 Microsoft Visual Studio 2026 (MSVC v143) 編譯生成。</li>
-                <li><strong>Python 前端與工具</strong>：基於 <code>Python 3.14</code>，在 PyCharm 2025.3.3 中開發，負責 PCAP 解析、視覺化渲染及 GUI 介面。</li>
+                <li><strong>C++ 核心後端</strong>：使用 CLion 2026.1 開發，採用 <code>C++23</code> 標準，最終二進位檔案由 Microsoft Visual Studio 2026 (MSVC v143) 編譯生成。</li>
+                <li><strong>Python 前端與工具</strong>：基於 <code>Python 3.14</code>，在 PyCharm 2026.1.1 中開發，負責 PCAP 解析、視覺化渲染及 GUI 介面。</li>
                 <li><strong>圖形介面</strong>：由 <code>PyQt6</code> 建構的現代化介面，結合 Qt WebEngine 展示互動式網路拓撲。</li>
+                <li><strong>AI Agent 協作</strong>：介面最佳化、文件同步與發布流程中使用 OpenAI Codex 作為智慧程式設計 Agent 輔助開發。</li>
             </ul>
         </div>
 
@@ -449,7 +447,7 @@
         </div>
         <div class="note">
             <strong>Q: 如何獲取軟體更新？</strong><br>
-            A: 版本 <code>2.0</code> 已完成介面、本地化、視覺化、異常檢測與後端效能最佳化。後續更新將以 GitHub 倉庫發布為準。
+            A: 版本 <code>2.1</code> 已完成 MS Fluent 介面、工作台佈局、導覽適配、本地化、視覺化與異常檢測等最佳化。後續更新將以 GitHub 倉庫發布為準。
         </div>
 
         <h2>📋 10. 附錄：資料格式參考</h2>
@@ -479,7 +477,7 @@
 
         <hr>
         <div class="footer">
-            ©2026 那，邊。版權所有。 本手冊最後更新於 2026年4月19日。
+            ©2026 那，邊。版權所有。 本手冊最後更新於 2026年4月20日。
         </div>
     </div>
 </body>
