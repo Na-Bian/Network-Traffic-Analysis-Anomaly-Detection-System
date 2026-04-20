@@ -46,9 +46,11 @@ from .tabs.flow_sort_tab import FlowSortTab
 from .tabs.path_tab import PathTab
 from .tabs.subgraph_tab import SubgraphTab
 from .task_handler import TaskHandler
+from .task_pipeline import TaskPipeline
 from .translator import tr, lang_mgr
 from .utils import resource_path, core_executable_path, TempDirManager
-from .worker import SubgraphWorker, PcapConvertWorker
+from backend.readPcap import save_to_csv
+from backend.subgraph import generate_html as generate_graph_html
 
 
 class AdaptiveTabWidget(QTabWidget):
@@ -336,6 +338,9 @@ class MainWindow(MSFluentWindow):
         self.current_json_path = None
         self.original_pcap_path = None
         self.converted_csv_path = None
+        self.loaded_dataset_mtime = None
+        self.loaded_dataset_threads = None
+        self.dataset_reload_required = False
 
         self.current_html_original_path = None  # 当前显示子图的原始HTML
         self.current_html_display_path = None  # 当前显示子图的显示HTML，将CDN替换为本地资源
@@ -359,7 +364,8 @@ class MainWindow(MSFluentWindow):
         self.manual_command_button = None
         self.title_back_button = None
 
-        self.task_handler = TaskHandler(self)  # 任务处理器
+        self.pipeline = TaskPipeline(self)
+        self.task_handler = TaskHandler(self, self.pipeline)  # 任务处理器
 
         self.init_ui()
         self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
@@ -1032,6 +1038,15 @@ class MainWindow(MSFluentWindow):
             f"background-color: rgba({titlebar_bg.red()}, {titlebar_bg.green()}, {titlebar_bg.blue()}, {titlebar_bg.alpha()}); border: none;"
         )
 
+        if hasattr(self.titleBar, "titleLabel") and self.titleBar.titleLabel is not None:
+            title_font = QFont(self.titleBar.titleLabel.font())
+            title_font.setPointSize(13)
+            title_font.setWeight(QFont.Weight.DemiBold)
+            self.titleBar.titleLabel.setFont(title_font)
+            self.titleBar.titleLabel.setStyleSheet(
+                f"font-size: 13px; font-weight: 600; color: {text_color.name()}; background: transparent;"
+            )
+
         for button in (self.titleBar.minBtn, self.titleBar.maxBtn):
             button.setNormalBackgroundColor(titlebar_bg)
             button.setHoverBackgroundColor(hover_bg)
@@ -1482,6 +1497,7 @@ class MainWindow(MSFluentWindow):
         max_threads = max(1, os.cpu_count() or 1)
         self.thread_spin.setRange(1, max_threads)
         self.thread_spin.setValue(min(4, max_threads))
+        self.thread_spin.valueChanged.connect(self._on_thread_count_changed)
         runtime_layout.addWidget(self.thread_spin)
         runtime_layout.addStretch()
         self.runtime_card.card_layout.addLayout(runtime_layout)
@@ -1628,6 +1644,7 @@ class MainWindow(MSFluentWindow):
         if ext in ['.json', '.html']:
             # 进入仅查看模式，禁用分析按钮
             self.set_view_only_mode(True)
+            self.pipeline.restart_backend_session()
 
             # 清除数据文件相关状态
             self.data_file = None
@@ -1641,6 +1658,9 @@ class MainWindow(MSFluentWindow):
             self.is_data_available = False
             self.original_pcap_path = None
             self.converted_csv_path = None
+            self.loaded_dataset_mtime = None
+            self.loaded_dataset_threads = None
+            self.dataset_reload_required = False
 
             # 新增：清除之前分析模式产生的全网拓扑文件记录
             self.full_graph_json_path = None
@@ -1691,6 +1711,10 @@ class MainWindow(MSFluentWindow):
         self.result_detail.clear()
         self.has_graph = False
         self.is_data_available = False
+        self.current_json_path = None
+        self.current_html_original_path = None
+        self.current_html_display_path = None
+        self.update_export_actions()
         self.update_webview_theme(tr("analyzing_data", "正在分析数据，请稍候..."))
         self.log_text.append(tr("loaded_file", "已加载文件: {}").format(file_path))
         self._set_dashboard_status("dashboard_loaded", "数据已就绪")
@@ -1698,12 +1722,58 @@ class MainWindow(MSFluentWindow):
         if ext == '.pcap':
             self.convert_pcap(file_path)
         else:  # .csv
+            self._load_dataset_and_render(file_path)
+
+    def _load_dataset_and_render(self, file_path):
+        self.switchTo(self.results_interface)
+        self.show_output_route("log")
+        self.log_text.append(tr("dataset_loading", "正在加载图模型，请稍候..."))
+        self._set_dashboard_status("dashboard_loading", "正在构建图模型")
+
+        def on_load_success(result):
+            metadata = result.metadata or {}
+            self.loaded_dataset_mtime = os.path.getmtime(file_path) if os.path.exists(file_path) else None
+            self.loaded_dataset_threads = self.thread_spin.value()
+            self.dataset_reload_required = False
+            self.is_data_available = int(metadata.get("vertex_count", 0) or 0) > 0
+            self._set_dashboard_status("dashboard_loaded", "图模型已就绪")
             self.show_full_graph()
+
+        def on_load_error(message):
+            self.is_data_available = False
+            self.loaded_dataset_mtime = None
+            self.loaded_dataset_threads = None
+            self.dataset_reload_required = False
+            self._set_dashboard_status("dashboard_invalid", "数据不可用")
+            self._show_error_dialog(tr("error", "错误"), message)
+
+        self.pipeline.load_dataset(
+            file_path,
+            self.thread_spin.value(),
+            on_output=lambda message: self.log_text.append(str(message)),
+            on_error=on_load_error,
+            on_success=on_load_success,
+        )
+
+    def _on_thread_count_changed(self, value):
+        if self.view_only_mode or not self.data_file:
+            return
+        if self.loaded_dataset_threads is None or self.loaded_dataset_threads == value:
+            return
+        self.dataset_reload_required = True
+        self.is_data_available = False
+        self.pipeline.restart_backend_session()
+        self.log_text.append(
+            tr("thread_count_reload", "线程数已变更为 {}，旧图模型缓存已失效，请重新执行分析或重新加载数据。").format(value)
+        )
 
     def convert_pcap(self, pcap_path):
         self.update_webview_theme(tr("parsing_pcap", "正在解析 PCAP 文件，请稍候..."))
         csv_path = self.temp_manager.get_path("converted.csv")
-        self.pcap_worker = PcapConvertWorker(pcap_path, csv_path)
+        self.switchTo(self.results_interface)
+        self.show_output_route("log")
+        self.log_text.append(tr("parsing_pcap", "正在解析 PCAP 文件，请稍候..."))
+        self._set_dashboard_status("dashboard_loading", "正在解析 PCAP")
 
         def on_pcap_converted(csv_path):
             # 设置 PCAP 原始路径和转换后的 CSV 路径
@@ -1712,18 +1782,21 @@ class MainWindow(MSFluentWindow):
             # 加载转换后的 CSV
             self.load_file(csv_path)
 
-        self.pcap_worker.success.connect(on_pcap_converted)
-        self.pcap_worker.error.connect(
-            lambda e: [
+        self.pipeline.run_callable(
+            save_to_csv,
+            pcap_path,
+            csv_path,
+            on_success=lambda _result: on_pcap_converted(csv_path),
+            on_error=lambda e: [
                 self._show_error_dialog(
                     tr("error", "错误"),
                     e
                 ),
                 setattr(self, 'is_data_available', False),
                 self._set_dashboard_status("dashboard_invalid", "数据不可用")
-            ]
+            ],
+            on_progress=lambda message: self.log_text.append(str(message)),
         )
-        self.pcap_worker.start()
 
     def export_pcap_csv(self):
         if not self.original_pcap_path or not self.converted_csv_path or not os.path.exists(self.converted_csv_path):
@@ -1800,27 +1873,14 @@ class MainWindow(MSFluentWindow):
         html_path = self.temp_manager.get_path("full_graph.html")
         self.full_graph_json_path = json_path
         self.full_graph_html_path = html_path
-        cmd = [
-            core_executable_path(),
-            "--input", self.data_file,
-            "--task", "full-graph",
-            "--output-json", json_path,
-            "--threads", str(self.thread_spin.value())
-        ]
-
-        def on_success_wrapper():
-            self.generate_html(json_path, html_path)
-            try:
-                if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
-                    with open(json_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    nodes = data.get('nodes', [])
-                    self.is_data_available = len(nodes) > 0
-            except Exception as e:
-                self.is_data_available = False
-                self.log_text.append(tr("data_validity_check_failed", "检查数据有效性失败: {}").format(e))
-
-        self.task_handler.run_worker(cmd, task_type="full-graph", on_success=on_success_wrapper)
+        cmd = self._core_command("full-graph")
+        self.task_handler.execute_command(
+            cmd,
+            task_type="full-graph",
+            generate_graph=True,
+            graph_name="full_graph",
+            clear_log=False,
+        )
 
     # ---------- HTML生成与显示 ----------
     def _render_options(self):
@@ -1862,22 +1922,17 @@ class MainWindow(MSFluentWindow):
         bgcolor, fontcolor = get_theme_colors()
         self.log_text.append(tr("generate_html_rendering", "正在渲染图表，请稍候..."))
 
-        self.subgraph_worker = SubgraphWorker(
-            json_path,
-            html_path,
-            bgcolor,
-            fontcolor,
-            render_options=self._render_options(),
-        )
-
-        def on_render_success(generated_html_path):
+        def on_render_success(render_info):
             try:
-                # generated_html_path 是原始HTML（CDN版本）
+                if render_info:
+                    self._handle_render_info(
+                        "render_mode:{renderer}:{mode}:{nodes}:{edges}".format(**render_info)
+                    )
                 # 生成显示用的HTML文件（替换CDN为本地资源）
-                base, ext = os.path.splitext(generated_html_path)
+                base, ext = os.path.splitext(html_path)
                 display_html_path = base + "_display" + ext
                 # 复制原始文件到显示文件，然后替换
-                shutil.copy2(generated_html_path, display_html_path)
+                shutil.copy2(html_path, display_html_path)
                 replace_cdn_with_local(display_html_path, bgcolor, fontcolor,
                                        log_callback=lambda msg: self.log_text.append(msg))
                 # 加载显示文件
@@ -1885,16 +1940,24 @@ class MainWindow(MSFluentWindow):
                 self.log_text.append(tr("generate_html_success", "图表渲染完成！"))
                 # 记录路径
                 self.current_json_path = json_path
-                self.current_html_original_path = generated_html_path
+                self.current_html_original_path = html_path
                 self.current_html_display_path = display_html_path
                 self.update_export_actions()
             except Exception as e:
                 self.log_text.append(tr("generate_html_load_failed", "加载 HTML 失败: {}").format(e))
 
-        self.subgraph_worker.success.connect(on_render_success)
-        self.subgraph_worker.info.connect(self._handle_render_info)
-        self.subgraph_worker.error.connect(lambda e: self.log_text.append(e))
-        self.subgraph_worker.start()
+        self.pipeline.run_callable(
+            generate_graph_html,
+            json_path,
+            html_path,
+            bgcolor,
+            fontcolor,
+            render_options=self._render_options(),
+            data=data,
+            on_success=on_render_success,
+            on_error=lambda e: self.log_text.append(f"生成子图失败: {e}"),
+            on_progress=lambda message: self.log_text.append(str(message)),
+        )
 
     def _handle_render_info(self, message):
         if not message.startswith("render_mode:"):
@@ -2592,6 +2655,24 @@ class MainWindow(MSFluentWindow):
             self.is_data_available = False
             return False
 
+        try:
+            current_mtime = os.path.getmtime(self.data_file)
+        except OSError:
+            current_mtime = None
+        if self.loaded_dataset_mtime is not None and current_mtime is not None and current_mtime != self.loaded_dataset_mtime:
+            self.log_text.append(tr("dataset_file_changed", "检测到数据文件发生变化，正在重新加载图模型..."))
+            self.load_file(self.data_file)
+            return False
+
+        if self.dataset_reload_required or (
+                self.loaded_dataset_threads is not None and self.loaded_dataset_threads != self.thread_spin.value()
+        ):
+            self.log_text.append(
+                tr("dataset_thread_changed", "检测到线程数发生变化，正在按新的线程配置重新加载图模型...")
+            )
+            self._load_dataset_and_render(self.data_file)
+            return False
+
         if not self.is_data_available:
             self._show_warning_dialog(
                 tr("invalid_data", "数据无效"),
@@ -2600,6 +2681,10 @@ class MainWindow(MSFluentWindow):
             return False
 
         return True
+
+    def closeEvent(self, event):
+        self.pipeline.close_backend_session()
+        super().closeEvent(event)
 
     def about(self):
         dark = isDarkTheme()

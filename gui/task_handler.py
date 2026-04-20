@@ -3,8 +3,8 @@ import re
 
 from PyQt6.QtCore import QObject, QTime, QTimer
 
+from .task_pipeline import TaskPipeline
 from .translator import tr, translate_backend_output, translate_violation_reason
-from .worker import AnalyzerWorker
 
 
 class TaskHandler(QObject):
@@ -43,18 +43,23 @@ class TaskHandler(QObject):
         ),
     }
 
-    def __init__(self, main_window):
+    def __init__(self, main_window, pipeline: TaskPipeline):
         super().__init__(main_window)
         self.main = main_window  # 持有主窗口引用，用于更新UI
+        self.pipeline = pipeline
         self.current_task_type = None
         self.task_output_buffer = []
-        self.worker = None
 
     # ---------- 任务启动 ----------
-    def run_worker(self, cmd, task_type, on_success=None):
-        """启动AnalyzerWorker线程"""
+    def run_backend_task(self, payload, task_type, on_success=None, clear_log=True):
+        """通过常驻后端会话执行分析任务。"""
         self.current_task_type = task_type
-        self.main.log_text.clear()
+        cmd = [
+            payload.get("task", task_type),
+            *(f"{key}={value}" for key, value in payload.items() if key not in {"action", "task"})
+        ]
+        if clear_log:
+            self.main.log_text.clear()
         task_display_name = self.get_task_display_name(task_type)
         self.main.log_text.append(
             tr("task_start", "[{}] 🚀 开始执行任务: {}").format(
@@ -62,7 +67,7 @@ class TaskHandler(QObject):
             )
         )
         self.main.log_text.append(
-            tr("command_line", "[{}] 命令行: {}").format(
+            tr("command_line", "[{}] 后端会话请求: {}").format(
                 QTime.currentTime().toString(), ' '.join(cmd)
             ) + "\n"
         )
@@ -75,15 +80,8 @@ class TaskHandler(QObject):
 
         self.main.show_output_route("log")
 
-        self.worker = AnalyzerWorker(cmd)
-        self.worker.output.connect(self.handle_worker_output)
-        self.worker.error.connect(self.handle_worker_error)
-        worker = self.worker
-
-        def success_handler():
-            collected_output = getattr(worker, "output_lines", None)
-            if collected_output is not None:
-                self.task_output_buffer = list(collected_output)
+        def success_handler(result):
+            self.task_output_buffer = list(result.all_lines)
             self.main.log_text.append(
                 tr("task_complete", "\n[{}] ✅ 任务执行完成！正在解析结果...").format(
                     QTime.currentTime().toString()
@@ -91,31 +89,55 @@ class TaskHandler(QObject):
             )
             self.parse_task_results()
             if on_success:
-                on_success()
+                on_success(result)
 
-        self.worker.success.connect(success_handler)
-        self.worker.finished.connect(self.worker_cleanup)
-        self.worker.start()
+        self.pipeline.run_backend_task(
+            payload,
+            on_output=self.handle_worker_output,
+            on_error=self.handle_worker_error,
+            on_success=success_handler,
+        )
 
-    def execute_command(self, base_cmd, task_type, generate_graph=False, graph_name=None):
-        """构建完整命令并启动（简化版run_worker）"""
-        full_cmd = base_cmd + [
-            "--input", self.main.data_file,
-            "--threads", str(self.main.thread_spin.value())
-        ]
+    def execute_command(self, base_cmd, task_type, generate_graph=False, graph_name=None, clear_log=True):
+        """兼容旧命令构造方式，转换为后端会话请求。"""
+        payload = self._command_to_payload(base_cmd)
+        payload["threads"] = self.main.thread_spin.value()
         json_path = html_path = None
         if generate_graph:
             if graph_name is None:
                 graph_name = task_type
             json_path = self.main.temp_manager.get_path(f"{graph_name}.json")
             html_path = self.main.temp_manager.get_path(f"{graph_name}.html")
-            full_cmd += ["--output-json", json_path]
+            payload["output_json"] = json_path
 
-        on_success = (lambda: self.main.generate_html(json_path, html_path)) if generate_graph else None
-        self.run_worker(full_cmd, task_type=task_type, on_success=on_success)
+        def on_success(result):
+            if generate_graph:
+                self.main.generate_html(json_path, html_path)
 
-    def worker_cleanup(self):
-        self.worker = None
+        self.run_backend_task(payload, task_type=task_type, on_success=on_success, clear_log=clear_log)
+
+    @staticmethod
+    def _command_to_payload(base_cmd):
+        payload = {"action": "run_task"}
+        index = 0
+        while index < len(base_cmd):
+            token = base_cmd[index]
+            if token.endswith(".exe"):
+                index += 1
+                continue
+            if not token.startswith("--"):
+                index += 1
+                continue
+            key = token[2:].replace("-", "_")
+            if index + 1 >= len(base_cmd) or base_cmd[index + 1].startswith("--"):
+                payload[key] = True
+                index += 1
+                continue
+            payload[key] = base_cmd[index + 1]
+            index += 2
+        if "task" not in payload:
+            raise ValueError("后端任务缺少 task 参数")
+        return payload
 
     # ---------- 输出处理 ----------
     def handle_worker_output(self, line):

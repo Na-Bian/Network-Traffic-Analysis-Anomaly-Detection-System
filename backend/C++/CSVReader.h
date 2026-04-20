@@ -8,20 +8,18 @@
 # include "Graph.h"
 
 # include <fstream>
-# include <future>
 # include <unordered_set>
-# include <sstream>
 # include <iostream>
-# include <thread>
 # include <utility>
 # include <limits>
 # include <algorithm>
 # include <cctype>
+# include <future>
+# include <sstream>
 
 
 class CSVReader {
     std::string CSVFile; // CSV文件名
-    unsigned int totalBytes = 0; // CSV文件的总字节数
     unsigned int totalLines = 0; // CSV文件的总行数
     unsigned int numThreads = 1; //用于读取和处理CSV文件的线程数量
 
@@ -61,8 +59,26 @@ class CSVReader {
     static int parseIntInRange(const std::string &value, const int minValue, const int maxValue,
                                const std::string &fieldName) {
         size_t pos = 0;
-        const int parsed = std::stoi(value, &pos);
-        if (pos != value.size()) throw std::invalid_argument(fieldName + "包含非数字字符: " + value);
+        int parsed = 0;
+        try {
+            parsed = std::stoi(value, &pos);
+        } catch (const std::exception &) {
+            pos = 0;
+            const double asDouble = std::stod(value, &pos);
+            if (pos != value.size()) throw std::invalid_argument(fieldName + "包含非数字字符: " + value);
+            if (std::floor(asDouble) != asDouble) {
+                throw std::invalid_argument(fieldName + "必须为整数: " + value);
+            }
+            if (asDouble < static_cast<double>(minValue) || asDouble > static_cast<double>(maxValue)) {
+                throw std::out_of_range(fieldName + "超出范围: " + value);
+            }
+            parsed = static_cast<int>(asDouble);
+            return parsed;
+        }
+        if (pos != value.size()) {
+            if (value.substr(pos) == ".0") return parsed;
+            throw std::invalid_argument(fieldName + "包含非数字字符: " + value);
+        }
         if (parsed < minValue || parsed > maxValue) {
             throw std::out_of_range(fieldName + "超出范围: " + value);
         }
@@ -100,19 +116,6 @@ class CSVReader {
         };
     }
 
-    //辅助函数readNextLines用于从CSV文件中读取若干行数据
-    std::string readNextLines(std::ifstream &fin, const unsigned int linesToRead) const {
-        if (totalLines == 0) return "";
-        std::string chunk; // 存储读取的行数据
-        chunk.reserve(totalBytes / totalLines * linesToRead); // 按每行平均字节数预先分配字符串空间
-        std::string line;
-        for (unsigned int i = 0; i < linesToRead && std::getline(fin, line); ++i) {
-            chunk += line; // 将读取的行数据添加到块字符串中
-            chunk += '\n'; // 添加换行符分隔行数据
-        }
-        return chunk;
-    }
-
 public:
     //构造函数，接受CSV文件名
     explicit CSVReader(std::string fileName = "network_data.csv",
@@ -121,24 +124,27 @@ public:
         std::ifstream fin(CSVFile, std::ios::binary | std::ios::ate); //以二进制模式打开CSV文件，并将文件指针移动到文件末尾
         if (threads < 1) throw std::invalid_argument("线程数量必须至少为1");
         if (!fin.is_open()) throw std::runtime_error("无法打开文件: " + CSVFile);
-        totalBytes = static_cast<unsigned int>(fin.tellg()); //获取CSV文件的总字节数
         fin.close();
     }
 
     //函数readCSV用于从CSV文件中读取网络数据，并将其构建为一个Graph对象
     //参数numThreads指定用于读取和处理CSV文件的线程数量，默认为当前计算机CPU的核心数
-    [[nodiscard]] Graph readCSV() {
+    [[nodiscard]] Graph readCSV(const Graph::ProgressCallback &progressCallback = {}) {
         std::unordered_set<uint32_t> uniqueIPs; // 存储唯一的IP地址
         std::ifstream fin(CSVFile);
+        if (!fin.is_open()) throw std::runtime_error("无法打开文件: " + CSVFile);
         std::string line;
         std::getline(fin, line); // 跳过标题行
         unsigned int linesCount = 0; // 统计总行数
+        std::vector<Record> records;
+        if (progressCallback) progressCallback("进度: 开始解析 CSV 文件...");
         while (std::getline(fin, line)) {
             ++linesCount;
             try {
                 const Record record = parseRecord(line);
                 uniqueIPs.insert(record.srcIP.getIP());
                 uniqueIPs.insert(record.dstIP.getIP());
+                records.push_back(record);
             } catch (const std::exception &e) {
                 std::cout << "数据行格式错误(第" << linesCount + 1 << "行): " << line
                         << " 错误信息: " << e.what() << std::endl;
@@ -148,49 +154,50 @@ public:
         totalLines = linesCount; // 记录总行数，供后续分块处理使用
 
         fin.close();
+        if (progressCallback) {
+            progressCallback(
+                "进度: CSV 解析完成，保留 " + std::to_string(records.size()) +
+                " 条有效记录，识别 " + std::to_string(uniqueIPs.size()) + " 个唯一节点"
+            );
+        }
 
         // 构建Graph对象
         Graph graph;
         graph.reserve(uniqueIPs.size()); // 预先分配节点空间，减少后续添加节点时的重新分配次数
 
-        fin.open(CSVFile);
-        std::getline(fin, line); // 跳过标题行
-
         std::vector<std::future<Graph> > futures; //存储线程的future对象
 
-        const unsigned int workerCount = std::min({
-            numThreads,
-            Graph::defaultThreadCount(),
-            (std::max)(1u, linesCount)
-        });
-        const unsigned int base = linesCount / workerCount; //计算每个线程需要处理的行数
-        const unsigned int remainder = linesCount % workerCount; //计算余数
+        const unsigned int workerCount = Graph::effectiveThreadCount(numThreads, records.size());
+        if (progressCallback) {
+            progressCallback(
+                "进度: 使用 " + std::to_string(workerCount) + " 个线程并行构建局部图..."
+            );
+        }
+        const unsigned int base = static_cast<unsigned int>(records.size()) / workerCount; //计算每个线程需要处理的记录数
+        const unsigned int remainder = static_cast<unsigned int>(records.size()) % workerCount; //计算余数
 
-        //分块并行读取和处理CSV文件
-        unsigned int firstLineInChunk = 2;
+        // 分块并行构建局部图，每个线程只处理自己的记录切片
+        size_t begin = 0;
         for (unsigned int i = 0; i < workerCount; ++i) {
-            const unsigned int linesToRead = (i < remainder) ? base + 1 : base; //前remainder个线程处理base+1行，其他线程处理base行
-            if (linesToRead == 0) continue;
-            const unsigned int chunkFirstLine = firstLineInChunk;
-            std::string chunk = readNextLines(fin, linesToRead); // 读取若干行数据作为一个块
-            firstLineInChunk += linesToRead;
-            futures.push_back(std::async(std::launch::async, [chunk = std::move(chunk), chunkFirstLine]() {
-                std::stringstream ss(chunk); //将块数据转换为字符串流，逐行解析
-                std::string string;
-                unsigned int lineNumber = chunkFirstLine;
+            const size_t recordsToRead = i < remainder ? base + 1 : base;
+            if (recordsToRead == 0) continue;
+            const size_t chunkBegin = begin;
+            const size_t chunkEnd = chunkBegin + recordsToRead;
+            begin = chunkEnd;
+            futures.push_back(std::async(std::launch::async, [chunkBegin, chunkEnd, &records] {
                 Graph localGraph;
-
-                while (std::getline(ss, string)) {
-                    try {
-                        const Record record = parseRecord(string);
-                        localGraph.addRecord(record.srcIP, record.dstIP, record.protocol, record.srcPort,
-                                             record.dstPort,
-                                             record.dataSize, record.duration);
-                    } catch (const std::exception &e) {
-                        std::cout << "数据行格式错误(第" << lineNumber << "行): " << string
-                                << " 错误信息: " << e.what() << std::endl;
-                    }
-                    ++lineNumber;
+                localGraph.reserve((chunkEnd - chunkBegin) * 2);
+                for (size_t idx = chunkBegin; idx < chunkEnd; ++idx) {
+                    const auto &[srcIP, dstIP, protocol, srcPort, dstPort, dataSize, duration] = records[idx];
+                    localGraph.addRecord(
+                        srcIP,
+                        dstIP,
+                        protocol,
+                        srcPort,
+                        dstPort,
+                        dataSize,
+                        duration
+                    );
                 }
                 return localGraph;
             }));
@@ -200,8 +207,13 @@ public:
             graph.mergeFrom(f.get());
         }
 
-        fin.close();
+        if (progressCallback) progressCallback("进度: 图模型构建完成");
+
         return graph;
+    }
+
+    [[nodiscard]] unsigned int getTotalLines() const {
+        return totalLines;
     }
 };
 

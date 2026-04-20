@@ -24,11 +24,11 @@ class SubgraphExporter {
         }
     };
 
-    Graph graph;
+    const Graph &graph;
 
 public:
     //构造函数
-    explicit SubgraphExporter(Graph graph) : graph(std::move(graph)) {
+    explicit SubgraphExporter(const Graph &graph) : graph(graph) {
     }
 
     //将路径集合导出为一个子图，包含所有路径上的节点和边
@@ -183,7 +183,7 @@ public:
         comp.nodes = nodes;
         for (const int u: nodes) {
             const auto &edges = graph.getEdges(u);
-            for (int edgeIdx: edges.getAllEdgeIndices()) {
+            for (const int edgeIdx: edges.getAllEdgeIndices()) {
                 if (auto info = edges.getEdgeInfo(edgeIdx); nodes.contains(info.dstIndex)) {
                     comp.edges.insert({u, info.dstIndex, info.totalDataSize});
                 }
@@ -264,8 +264,8 @@ public:
         // 写入边信息
         file << "  \"links\": [\n";
         bool firstEdge = true;
-        for (const auto &comp: components) {
-            for (const auto &edge: comp.edges) {
+        for (const auto &[nodes, edges]: components) {
+            for (const auto &edge: edges) {
                 if (!firstEdge) {
                     file << ",\n"; // 只有非首个边前才加逗号
                 }

@@ -135,13 +135,17 @@ def _load_graph(json_path):
 
 
 def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white",
-                    data=None, mode=None, render_options=None):
+                    data=None, mode=None, render_options=None, progress_callback=None):
     data = data if data is not None else _load_graph(json_path)
     nodes = data.get("nodes", [])
     render_options = render_options or {}
+    if progress_callback:
+        progress_callback("渲染进度: 正在筛选可视化边...")
     links = _filter_top_k_edges(data.get("links", []), int(render_options.get("top_k_edges", 0) or 0))
     mode = mode or _graph_mode(len(nodes), len(links))
     performance_mode = mode == "performance"
+    if progress_callback:
+        progress_callback("渲染进度: 正在准备节点布局...")
     positioned_nodes = _position_nodes(nodes) if performance_mode else {}
 
     node_start_color = "#FFCCBC"
@@ -173,6 +177,8 @@ def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="w
     group_colors = ["#FF4136", "#2ECC40", "#0074D9"]
     node_ids = {node["id"] for node in nodes}
     vis_edges = []
+    if progress_callback:
+        progress_callback("渲染进度: 正在构建节点与边的数据集...")
     if links:
         log_values = [math.log10(edge.get("value", 0) + 1) for edge in links]
         max_log, min_log = max(log_values), min(log_values)
@@ -200,6 +206,8 @@ def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="w
             })
 
     options_script = _vis_options(mode, fontcolor)
+    if progress_callback:
+        progress_callback("渲染进度: 正在序列化 HTML 内容...")
     nodes_json = json.dumps(vis_nodes, ensure_ascii=False)
     edges_json = json.dumps(vis_edges, ensure_ascii=False)
     html = f"""<!DOCTYPE html>
@@ -236,9 +244,13 @@ def render_vis_html(json_path, output_html_path, bgcolor="#222222", fontcolor="w
 </html>
 """
 
+    if progress_callback:
+        progress_callback("渲染进度: 正在写入 HTML 文件...")
     with open(output_html_path, "w", encoding="utf-8") as f:
         f.write(html)
 
+    if progress_callback:
+        progress_callback("渲染进度: vis-network HTML 已生成")
     return {
         "renderer": "vis-network",
         "mode": mode,

@@ -136,10 +136,12 @@ def _aggregate_by_subnet(nodes, links):
 
 
 def render_sigma_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white",
-                      data=None, mode=None, render_options=None):
+                      data=None, mode=None, render_options=None, progress_callback=None):
     data = data if data is not None else _load_graph(json_path)
     nodes = data.get("nodes", [])
     render_options = render_options or {}
+    if progress_callback:
+        progress_callback("渲染进度: 正在筛选 Sigma 边数据...")
     links = _filter_top_k_edges(data.get("links", []), int(render_options.get("top_k_edges", 0) or 0))
     mode = mode or _graph_mode(len(nodes), len(links))
 
@@ -154,12 +156,16 @@ def render_sigma_html(json_path, output_html_path, bgcolor="#222222", fontcolor=
         len(nodes) >= aggregate_node_threshold or len(links) >= aggregate_edge_threshold
     )
 
+    if progress_callback:
+        progress_callback("渲染进度: 正在构建 Sigma 节点布局...")
     raw_nodes = _build_sigma_nodes(nodes, mode)
     node_ids = {node["id"] for node in nodes}
     raw_edges = _build_sigma_edges(links, node_ids)
     node_to_subnet = {}
 
     if use_aggregate:
+        if progress_callback:
+            progress_callback("渲染进度: 图规模较大，正在聚合子网视图...")
         aggregate_nodes, aggregate_links, node_to_subnet = _aggregate_by_subnet(nodes, links)
         sigma_nodes = _build_sigma_nodes(aggregate_nodes, "performance")
         sigma_edges = _build_sigma_edges(aggregate_links, {node["id"] for node in aggregate_nodes})
@@ -167,6 +173,8 @@ def render_sigma_html(json_path, output_html_path, bgcolor="#222222", fontcolor=
         sigma_nodes = raw_nodes
         sigma_edges = raw_edges
 
+    if progress_callback:
+        progress_callback("渲染进度: 正在序列化 Sigma HTML 内容...")
     settings_json = json.dumps(_sigma_settings(bgcolor, fontcolor), ensure_ascii=False)
     nodes_json = json.dumps(sigma_nodes, ensure_ascii=False)
     edges_json = json.dumps(sigma_edges, ensure_ascii=False)
@@ -372,12 +380,16 @@ def render_sigma_html(json_path, output_html_path, bgcolor="#222222", fontcolor=
 </html>
 """
 
+    if progress_callback:
+        progress_callback("渲染进度: 正在写入 Sigma HTML 文件...")
     with open(output_html_path, "w", encoding="utf-8") as f:
         f.write(html)
 
     if not os.path.exists(output_html_path):
         raise RuntimeError(f"错误：找不到文件 {output_html_path}")
 
+    if progress_callback:
+        progress_callback("渲染进度: Sigma HTML 已生成")
     return {
         "renderer": "sigma",
         "mode": mode,
