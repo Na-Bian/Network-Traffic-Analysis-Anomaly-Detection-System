@@ -927,7 +927,7 @@ class MainWindow(MSFluentWindow):
         if hasattr(self, "titleBar") and self.titleBar is not None:
             self.titleBar.setFixedHeight(48)
             if hasattr(self.titleBar, "hBoxLayout"):
-                self.titleBar.hBoxLayout.setContentsMargins(20, 0, 14, 0)
+                self.titleBar.hBoxLayout.setContentsMargins(10, 0, 0, 0)
                 self.titleBar.hBoxLayout.setSpacing(0)
             if hasattr(self.titleBar, "iconLabel"):
                 self.titleBar.iconLabel.setFixedSize(18, 18)
@@ -935,8 +935,11 @@ class MainWindow(MSFluentWindow):
                 self.titleBar.titleLabel.setStyleSheet(
                     "font-size: 13px; font-weight: 600; background: transparent;"
                 )
-                self.titleBar.titleLabel.setContentsMargins(12, 0, 12, 0)
-                self.titleBar.titleLabel.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+                self.titleBar.titleLabel.setContentsMargins(10, 0, 10, 0)
+                self.titleBar.titleLabel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                self.titleBar.titleLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+                if hasattr(self.titleBar, "hBoxLayout"):
+                    self.titleBar.hBoxLayout.setStretchFactor(self.titleBar.titleLabel, 1)
             self._ensure_titlebar_back_button()
 
         self._refresh_titlebar_layout()
@@ -948,8 +951,8 @@ class MainWindow(MSFluentWindow):
                 nav.setMinimumExpandWidth(196)
                 nav.expand(useAni=False)
             else:
-                nav.setMinimumWidth(112)
-                nav.setMaximumWidth(128)
+                nav.setMinimumWidth(104)
+                nav.setMaximumWidth(120)
             self._refresh_navigation_visuals()
 
     def _ensure_titlebar_back_button(self):
@@ -974,7 +977,11 @@ class MainWindow(MSFluentWindow):
         title_label = self.titleBar.titleLabel
         metrics = title_label.fontMetrics()
         natural_width = metrics.horizontalAdvance(title_label.text()) + 28
-        available_width = max(220, self.width() - 340)
+        title_x = title_label.x()
+        right_limit = self.titleBar.width() - 12
+        if hasattr(self.titleBar, "minBtn") and self.titleBar.minBtn is not None:
+            right_limit = min(right_limit, self.titleBar.minBtn.x() - 10)
+        available_width = max(220, right_limit - title_x)
         title_label.setFixedWidth(min(natural_width, available_width))
 
     def _refresh_navigation_visuals(self):
@@ -997,14 +1004,14 @@ class MainWindow(MSFluentWindow):
                 continue
             is_ms_nav = not hasattr(self.navigationInterface, "setExpandWidth")
             if is_ms_nav:
-                item.setFixedSize(96, 76)
+                item.setFixedSize(92, 74)
             else:
                 item.setMinimumHeight(40)
             item.setProperty("isEnterEnabled", True)
             if hasattr(item, "setIconSize"):
                 item.setIconSize(QSize(24, 24) if is_ms_nav else QSize(18, 18))
             item.setStyleSheet(
-                "font-size: 13px; font-weight: 500; border-radius: 8px; padding: 6px 4px;"
+                "font-size: 12px; font-weight: 500; border-radius: 8px; padding: 5px 4px;"
             )
 
     def _refresh_titlebar_theme(self):
@@ -1012,14 +1019,17 @@ class MainWindow(MSFluentWindow):
             return
 
         dark = isDarkTheme()
+        mica_enabled = self.isMicaEffectEnabled()
         titlebar_bg = QColor("#1f1f1f" if dark else "#f8fbff")
+        if mica_enabled:
+            titlebar_bg.setAlpha(214 if dark else 226)
         hover_bg = QColor("#2d2d2d" if dark else "#edf5ff")
         pressed_bg = QColor("#3a3a3a" if dark else "#dfeeff")
         text_color = QColor("#ffffff" if dark else "#000000")
 
         self.titleBar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.titleBar.setStyleSheet(
-            f"background-color: {titlebar_bg.name()}; border: none;"
+            f"background-color: rgba({titlebar_bg.red()}, {titlebar_bg.green()}, {titlebar_bg.blue()}, {titlebar_bg.alpha()}); border: none;"
         )
 
         for button in (self.titleBar.minBtn, self.titleBar.maxBtn):
@@ -1029,9 +1039,15 @@ class MainWindow(MSFluentWindow):
             button.setNormalColor(text_color)
             button.setHoverColor(text_color)
             button.setPressedColor(text_color)
+            button.setStyleSheet("border: none; border-radius: 0px;")
 
         self.titleBar.closeBtn.setNormalBackgroundColor(titlebar_bg)
+        self.titleBar.closeBtn.setHoverBackgroundColor(QColor("#e81123"))
+        self.titleBar.closeBtn.setPressedBackgroundColor(QColor("#c50f1f"))
         self.titleBar.closeBtn.setNormalColor(text_color)
+        self.titleBar.closeBtn.setHoverColor(QColor("#ffffff"))
+        self.titleBar.closeBtn.setPressedColor(QColor("#ffffff"))
+        self.titleBar.closeBtn.setStyleSheet("border: none; border-top-right-radius: 8px;")
 
     def _show_fluent_dialog(self, title, content, level="info"):
         box = MessageBox(title, content, self)
@@ -1927,18 +1943,39 @@ class MainWindow(MSFluentWindow):
         bg_color, text_color = get_theme_colors()
         dark = isDarkTheme()
         mica_enabled = self.isMicaEffectEnabled()
+
+        def alpha_color(color: str, alpha: int) -> str:
+            q = QColor(color)
+            return f"rgba({q.red()}, {q.green()}, {q.blue()}, {alpha})"
+
         window_bg = "transparent" if mica_enabled else bg_color
-        page_bg = "#1f1f1f" if dark else "#f4f8fc"
+        page_bg = "transparent" if mica_enabled else ("#1f1f1f" if dark else "#f4f8fc")
         scroll_bg = "transparent" if mica_enabled else bg_color
-        surface_color = "#2a2d31" if dark else "#ffffff"
-        card_color = "#32353a" if dark else "#f7f9fc"
+        surface_color = alpha_color("#2a2d31" if dark else "#ffffff", 228) if mica_enabled else (
+            "#2a2d31" if dark else "#ffffff"
+        )
+        card_color = alpha_color("#32353a" if dark else "#f7f9fc", 216) if mica_enabled else (
+            "#32353a" if dark else "#f7f9fc"
+        )
         border_color = "#464b53" if dark else "#d7dde7"
-        nav_bg = "#1d2026" if dark else "#f8fbff"
-        nav_hover = "#2b3038" if dark else "#edf5ff"
-        nav_pressed = "#343a44" if dark else "#dfeeff"
-        nav_selected = "#263241" if dark else "#e4f1ff"
-        hero_bg = "#262a30" if dark else "#f8fbff"
-        panel_bg = "#2d3138" if dark else "#ffffff"
+        nav_bg = alpha_color("#1d2026" if dark else "#f8fbff", 120) if mica_enabled else (
+            "#1d2026" if dark else "#f8fbff"
+        )
+        nav_hover = alpha_color("#2b3038" if dark else "#edf5ff", 196) if mica_enabled else (
+            "#2b3038" if dark else "#edf5ff"
+        )
+        nav_pressed = alpha_color("#343a44" if dark else "#dfeeff", 212) if mica_enabled else (
+            "#343a44" if dark else "#dfeeff"
+        )
+        nav_selected = alpha_color("#263241" if dark else "#e4f1ff", 224) if mica_enabled else (
+            "#263241" if dark else "#e4f1ff"
+        )
+        hero_bg = alpha_color("#262a30" if dark else "#f8fbff", 202) if mica_enabled else (
+            "#262a30" if dark else "#f8fbff"
+        )
+        panel_bg = alpha_color("#2d3138" if dark else "#ffffff", 210) if mica_enabled else (
+            "#2d3138" if dark else "#ffffff"
+        )
         subtle_text = "#c4c9d4" if dark else "#617082"
         header_bg = "#39404a" if dark else "#eef3fb"
         alt_bg = "#2f3339" if dark else "#f8fbff"
@@ -1958,6 +1995,9 @@ class MainWindow(MSFluentWindow):
                 background-color: {scroll_bg};
                 border: none;
             }}
+            QWidget {{
+                background: transparent;
+            }}
             QWidget#customRuleContent {{
                 background-color: {page_bg};
                 color: {text_color};
@@ -1965,6 +2005,9 @@ class MainWindow(MSFluentWindow):
             QStackedWidget {{
                 background-color: transparent;
                 border: none;
+            }}
+            QStackedWidget > QWidget {{
+                background-color: transparent;
             }}
             QWidget#dashboard_content,
             QWidget#topology_content,
