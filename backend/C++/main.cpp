@@ -308,42 +308,53 @@ namespace {
         return get<string>(it->second);
     }
 
+    double scalarToDouble(const JsonScalar &value, const string &key) {
+        if (holds_alternative<double>(value)) {
+            return get<double>(value);
+        }
+        if (holds_alternative<string>(value)) {
+            const string text = trim(get<string>(value));
+            if (text.empty()) {
+                throw invalid_argument("字段类型错误: " + key);
+            }
+            size_t parsedLength = 0;
+            try {
+                const double parsed = stod(text, &parsedLength);
+                if (parsedLength != text.size()) {
+                    throw invalid_argument("字段类型错误: " + key);
+                }
+                return parsed;
+            } catch (const exception &) {
+                throw invalid_argument("字段类型错误: " + key);
+            }
+        }
+        throw invalid_argument("字段类型错误: " + key);
+    }
+
     int optionalInt(const unordered_map<string, JsonScalar> &object, const string &key, const int defaultValue) {
         const auto it = object.find(key);
         if (it == object.end() || holds_alternative<monostate>(it->second)) return defaultValue;
-        if (!holds_alternative<double>(it->second)) {
-            throw invalid_argument("字段类型错误: " + key);
-        }
-        return static_cast<int>(llround(get<double>(it->second)));
+        return static_cast<int>(llround(scalarToDouble(it->second, key)));
     }
 
     size_t optionalSize(const unordered_map<string, JsonScalar> &object, const string &key, const size_t defaultValue) {
         const auto it = object.find(key);
         if (it == object.end() || holds_alternative<monostate>(it->second)) return defaultValue;
-        if (!holds_alternative<double>(it->second)) {
-            throw invalid_argument("字段类型错误: " + key);
-        }
-        return static_cast<size_t>(llround(get<double>(it->second)));
+        return static_cast<size_t>(llround(scalarToDouble(it->second, key)));
     }
 
     long long optionalLongLong(const unordered_map<string, JsonScalar> &object, const string &key,
                                const long long defaultValue) {
         const auto it = object.find(key);
         if (it == object.end() || holds_alternative<monostate>(it->second)) return defaultValue;
-        if (!holds_alternative<double>(it->second)) {
-            throw invalid_argument("字段类型错误: " + key);
-        }
-        return static_cast<long long>(llround(get<double>(it->second)));
+        return static_cast<long long>(llround(scalarToDouble(it->second, key)));
     }
 
     double optionalDouble(const unordered_map<string, JsonScalar> &object, const string &key,
                           const double defaultValue) {
         const auto it = object.find(key);
         if (it == object.end() || holds_alternative<monostate>(it->second)) return defaultValue;
-        if (!holds_alternative<double>(it->second)) {
-            throw invalid_argument("字段类型错误: " + key);
-        }
-        return get<double>(it->second);
+        return scalarToDouble(it->second, key);
     }
 
     void emitJsonLine(const string &line) {
