@@ -145,12 +145,14 @@ public:
     // 端口扫描攻击者检测
     // 端口扫描攻击者通常会对同一个IP的大量不同端口发送探测包，寻找开放的服务
     [[nodiscard]] std::set<PortScanner> detectPortScanners(int portThreshold = 20,
-        double outRatioThreshold = 0.8, long long minTraffic = 0) const;
+                                                           double outRatioThreshold = 0.8,
+                                                           long long minTraffic = 0) const;
 
     //DDoS攻击目标检测
     //DDoS攻击目标通常在短时间内的入流量极大，且同时与海量不同的IP通信
     [[nodiscard]] std::set<DDoSTarget> detectDDoSTargets(int sourceThreshold = 20,
-        long long inDataThreshold = 1LL << 30, double inRatioThreshold = 0.8) const;
+                                                         long long inDataThreshold = 1LL << 30,
+                                                         double inRatioThreshold = 0.8) const;
 
     //函数minCongestion用于寻找图中从a节点到b节点的最小拥塞路径
     //参数：起始节点a的IP地址、目标节点b的IP地址

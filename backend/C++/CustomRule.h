@@ -120,10 +120,9 @@ public:
     //重载构造函数：使用CIDR字符串指定IP范围
     CustomRule(const Graph &graph, const IPAddress &targetIP, const std::string &cidr, const uint8_t protocol = 0,
                const uint16_t srcPort = 0, const uint16_t dstPort = 0, const RuleType type = RuleType::DENY,
-               const long long maxTraffic = (std::numeric_limits<long long>::max)()) : CustomRule(graph, targetIP,
-        parseCIDR(cidr).first, // 起始 IP
-        parseCIDR(cidr).second, // 结束 IP
-        protocol, srcPort, dstPort, type, maxTraffic) {
+               const long long maxTraffic = (std::numeric_limits<long long>::max)()) : graph(graph),
+        targetIP(targetIP), IPRange(parseCIDR(cidr)), protocol(protocol),
+        srcPort(srcPort), dstPort(dstPort), type(type), maxTraffic(maxTraffic) {
     }
 
     //函数checkViolation用于检查当前网络记录是否违反了自定义规则

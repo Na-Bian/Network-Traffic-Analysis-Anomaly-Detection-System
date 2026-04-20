@@ -4,7 +4,6 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
-
 DEFAULT_LANGUAGE = "zh_CN"
 
 

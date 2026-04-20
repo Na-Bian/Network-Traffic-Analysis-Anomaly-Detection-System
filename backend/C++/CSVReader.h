@@ -183,7 +183,8 @@ public:
                 while (std::getline(ss, string)) {
                     try {
                         const Record record = parseRecord(string);
-                        localGraph.addRecord(record.srcIP, record.dstIP, record.protocol, record.srcPort, record.dstPort,
+                        localGraph.addRecord(record.srcIP, record.dstIP, record.protocol, record.srcPort,
+                                             record.dstPort,
                                              record.dataSize, record.duration);
                     } catch (const std::exception &e) {
                         std::cout << "数据行格式错误(第" << lineNumber << "行): " << string

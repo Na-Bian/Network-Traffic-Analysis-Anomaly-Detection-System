@@ -1,4 +1,5 @@
 # gui/main_window.py
+import ipaddress
 import json
 import os
 import shutil
@@ -721,7 +722,8 @@ class MainWindow(MSFluentWindow):
             (self.path_interface, self._nav_label("path_search", "路径查找", "nav_path_short", "路径")),
             (self.anomaly_interface, self._nav_label("anomaly_detection", "异常检测", "nav_anomaly_short", "异常")),
             (self.rule_interface, self._nav_label("anomaly_tab_custom_rule", "自定义规则", "nav_rule_short", "规则")),
-            (self.subgraph_interface, self._nav_label("subgraph_visualization", "子图可视化", "nav_subgraph_short", "子图")),
+            (self.subgraph_interface,
+             self._nav_label("subgraph_visualization", "子图可视化", "nav_subgraph_short", "子图")),
             (self.results_interface, self._nav_label("nav_results", "结果中心", "nav_results_short", "结果")),
             (self.settings_interface, self._nav_label("settings", "设置", "nav_settings_short", "设置")),
         ]
@@ -836,9 +838,11 @@ class MainWindow(MSFluentWindow):
         if self.open_command_button is not None:
             self.open_command_button.setFixedWidth(max(152, min(214, text_width(self.open_command_button.text()) + 62)))
         if self.export_command_button is not None:
-            self.export_command_button.setFixedWidth(max(118, min(156, text_width(self.export_command_button.text()) + 76)))
+            self.export_command_button.setFixedWidth(
+                max(118, min(156, text_width(self.export_command_button.text()) + 76)))
         if self.manual_command_button is not None:
-            self.manual_command_button.setFixedWidth(max(140, min(198, text_width(self.manual_command_button.text()) + 62)))
+            self.manual_command_button.setFixedWidth(
+                max(140, min(198, text_width(self.manual_command_button.text()) + 62)))
 
     def _create_metric_card(self, parent_layout, icon, title_key, title_default, desc_key, desc_default):
         card = CardWidget()
@@ -1823,6 +1827,16 @@ class MainWindow(MSFluentWindow):
             if len(nodes) == 0:
                 self.log_text.append(tr("generate_html_no_nodes", "图中无任何节点，可能是数据文件中未包含有效 IP 地址。"))
                 self.update_webview_theme(tr("generate_html_theme_no_data", "图中无数据"))
+                if getattr(self, "_suppress_next_empty_graph_notice", False):
+                    self._suppress_next_empty_graph_notice = False
+                else:
+                    self._show_warning_dialog(
+                        tr("empty_graph_title", "未找到可视化节点"),
+                        tr(
+                            "empty_graph_content",
+                            "当前任务没有生成可视化节点。请检查数据文件是否包含有效 IP，或调整目标 IP、检测阈值后重试。"
+                        )
+                    )
                 return
         except Exception as e:
             self.log_text.append(tr("generate_html_read_failed", "读取 JSON 文件失败: {}").format(e))
@@ -2152,7 +2166,7 @@ class MainWindow(MSFluentWindow):
 
         # 运行日志
         self.log_text.setStyleSheet(f"""
-            QTextEdit {{    
+            QTextEdit {{
                 background-color: {surface_color}; color: {text_color}; border: 1px solid {border_color};
                 border-radius: 8px; padding: 6px;
                 font-family: Consolas, monospace; font-size: 12px;
@@ -2239,6 +2253,73 @@ class MainWindow(MSFluentWindow):
         multiplier = multipliers[unit_index] if 0 <= unit_index < len(multipliers) else 1
         return int(value_text) * multiplier
 
+    def _show_invalid_input(self, content):
+        self._show_warning_dialog(tr("invalid_input_title", "输入格式有误"), content)
+
+    def _is_valid_ipv4(self, value, label):
+        try:
+            ipaddress.IPv4Address(value)
+            return True
+        except ValueError:
+            self._show_invalid_input(
+                tr("invalid_ipv4_format", "{} 格式不正确：{}。请输入完整 IPv4 地址，例如 192.168.1.100。").format(
+                    label, value or tr("empty_value", "空值")
+                )
+            )
+            return False
+
+    def _is_valid_cidr(self, value):
+        try:
+            ipaddress.IPv4Network(value, strict=False)
+            return True
+        except ValueError:
+            self._show_invalid_input(
+                tr("invalid_cidr_format", "CIDR 范围格式不正确：{}。请输入类似 192.168.1.0/24 的 IPv4 网段。").format(
+                    value or tr("empty_value", "空值")
+                )
+            )
+            return False
+
+    def _validate_ip_range(self, start, end):
+        if not self._is_valid_ipv4(start, tr("custom_rule_start_ip_name", "起始IP")):
+            return False
+        if not self._is_valid_ipv4(end, tr("custom_rule_end_ip_name", "结束IP")):
+            return False
+        if int(ipaddress.IPv4Address(start)) > int(ipaddress.IPv4Address(end)):
+            self._show_invalid_input(
+                tr("invalid_ip_range_order", "起始 IP 不能大于结束 IP，请检查 IP 范围。")
+            )
+            return False
+        return True
+
+    def _parse_int_input(self, value_text, label, minimum=None, maximum=None):
+        try:
+            value = int(value_text)
+        except ValueError:
+            self._show_invalid_input(
+                tr("invalid_integer_format", "{} 必须为整数。").format(label)
+            )
+            return None
+        if minimum is not None and value < minimum:
+            self._show_invalid_input(
+                tr("invalid_integer_min", "{} 不能小于 {}。").format(label, minimum)
+            )
+            return None
+        if maximum is not None and value > maximum:
+            self._show_invalid_input(
+                tr("invalid_integer_range", "{} 必须在 {} 到 {} 之间。").format(label, minimum, maximum)
+            )
+            return None
+        return value
+
+    def _parse_scaled_bytes_input(self, value_text, unit_index, label):
+        value = self._parse_int_input(value_text, label, minimum=0)
+        if value is None:
+            return None
+        multipliers = [1, 1024, 1024 ** 2, 1024 ** 3]
+        multiplier = multipliers[unit_index] if 0 <= unit_index < len(multipliers) else 1
+        return value * multiplier
+
     def _execute_task(self, task_type, *args, generate_graph=False, graph_name=None):
         base_cmd = self._core_command(task_type, *args)
         self.switchTo(self.results_interface)
@@ -2274,6 +2355,10 @@ class MainWindow(MSFluentWindow):
                 tr("path_search_need_src_dst", "请输入源IP和目的IP")
             )
             return
+        if not self._is_valid_ipv4(src, tr("src_ip_name", "源IP")):
+            return
+        if not self._is_valid_ipv4(dst, tr("dst_ip_name", "目的IP")):
+            return
         if self.path_tab.compare_checkbox.isChecked():
             base_cmd = self._core_command("compare-paths", "--src", src, "--dst", dst)
             self.switchTo(self.results_interface)
@@ -2297,15 +2382,14 @@ class MainWindow(MSFluentWindow):
         ]
         min_traffic_str = tab.min_traffic_edit.text().strip()
         if min_traffic_str:
-            try:
-                min_traffic = self._scaled_bytes(min_traffic_str, tab.min_traffic_unit.currentIndex())
-                args += ["--min-traffic", str(min_traffic)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("port_scan_warning_title", "警告"),
-                    tr("port_scan_min_traffic_int", "最小总流量必须为整数")
-                )
+            min_traffic = self._parse_scaled_bytes_input(
+                min_traffic_str,
+                tab.min_traffic_unit.currentIndex(),
+                tr("port_scan_min_traffic_name", "最小总流量")
+            )
+            if min_traffic is None:
                 return
+            args += ["--min-traffic", str(min_traffic)]
         self._execute_task("port-scan", *args, generate_graph=True, graph_name="port_scan")
 
     def run_ddos_detection(self):
@@ -2319,15 +2403,14 @@ class MainWindow(MSFluentWindow):
         )
         traffic_str = self.anomaly_tab.ddos_tab.traffic_edit.text().strip()
         if traffic_str:
-            try:
-                val = self._scaled_bytes(traffic_str, self.anomaly_tab.ddos_tab.traffic_unit.currentIndex())
-                base_cmd += ["--in-data-threshold", str(val)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("ddos_warning_title", "警告"),
-                    tr("ddos_traffic_must_be_int", "入流量阈值必须为整数")
-                )
+            val = self._parse_scaled_bytes_input(
+                traffic_str,
+                self.anomaly_tab.ddos_tab.traffic_unit.currentIndex(),
+                tr("ddos_traffic_name", "入流量阈值")
+            )
+            if val is None:
                 return
+            base_cmd += ["--in-data-threshold", str(val)]
         self.task_handler.execute_command(base_cmd, task_type="ddos-target", generate_graph=True, graph_name="ddos")
 
     def run_star_detection(self):
@@ -2346,6 +2429,8 @@ class MainWindow(MSFluentWindow):
                 tr("subgraph_need_target_ip", "请输入目标IP")
             )
             return
+        if not self._is_valid_ipv4(ip, tr("target_ip_name", "目标IP")):
+            return
         self.log_text.append(tr("subgraph_generating", "正在生成以 {} 为中心的子图...").format(ip))
         self._execute_task("subgraph", "--target", ip, generate_graph=True, graph_name="subgraph")
 
@@ -2360,27 +2445,23 @@ class MainWindow(MSFluentWindow):
                 tr("custom_rule_need_target_ip", "请输入目标IP")
             )
             return
+        if not self._is_valid_ipv4(rule_target, tr("target_ip_name", "目标IP")):
+            return
 
         base_cmd = self._core_command("custom-rule", "--rule-target", rule_target)
 
         # 协议类型
         protocol_str = tab.protocol_edit.text().strip()
         if protocol_str:
-            try:
-                protocol_val = int(protocol_str)
-                if protocol_val < 0 or protocol_val > 255:
-                    self._show_warning_dialog(
-                        tr("custom_rule_warning_title", "警告"),
-                        tr("custom_rule_protocol_range", "协议类型必须是0-255之间的整数")
-                    )
-                    return
-                base_cmd += ["--rule-protocol", str(protocol_val)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_protocol_int", "协议类型必须为整数")
-                )
+            protocol_val = self._parse_int_input(
+                protocol_str,
+                tr("custom_rule_protocol_name", "协议类型"),
+                minimum=0,
+                maximum=255
+            )
+            if protocol_val is None:
                 return
+            base_cmd += ["--rule-protocol", str(protocol_val)]
 
         # 规则类型
         eng_rule_type = self._combo_value(tab.rule_type_combo, ["deny", "allow"], "deny")
@@ -2395,6 +2476,8 @@ class MainWindow(MSFluentWindow):
                     tr("custom_rule_need_cidr", "请输入CIDR范围")
                 )
                 return
+            if not self._is_valid_cidr(cidr):
+                return
             base_cmd += ["--range-cidr", cidr]
         else:
             start = tab.start_ip_edit.text().strip()
@@ -2405,46 +2488,39 @@ class MainWindow(MSFluentWindow):
                     tr("custom_rule_need_start_end", "请输入起始IP和结束IP")
                 )
                 return
+            if not self._validate_ip_range(start, end):
+                return
             base_cmd += ["--range-start", start, "--range-end", end]
 
         # 源端口
         src_port = tab.src_port_edit.text().strip()
         if src_port:
-            try:
-                int(src_port)
-                base_cmd += ["--rule-src-port", src_port]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_src_port_int", "源端口必须为整数")
-                )
+            parsed_port = self._parse_int_input(src_port, tr("custom_rule_src_port_name", "源端口"), minimum=0,
+                                                maximum=65535)
+            if parsed_port is None:
                 return
+            base_cmd += ["--rule-src-port", str(parsed_port)]
 
         # 目的端口
         dst_port = tab.dst_port_edit.text().strip()
         if dst_port:
-            try:
-                int(dst_port)
-                base_cmd += ["--rule-dst-port", dst_port]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_dst_port_int", "目的端口必须为整数")
-                )
+            parsed_port = self._parse_int_input(dst_port, tr("custom_rule_dst_port_name", "目的端口"), minimum=0,
+                                                maximum=65535)
+            if parsed_port is None:
                 return
+            base_cmd += ["--rule-dst-port", str(parsed_port)]
 
         # 最大流量阈值
         max_traffic_str = tab.max_traffic_edit.text().strip()
         if max_traffic_str:
-            try:
-                val = self._scaled_bytes(max_traffic_str, tab.max_traffic_unit.currentIndex())
-                base_cmd += ["--rule-max-traffic", str(val)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_max_traffic_int", "最大流量阈值必须为整数")
-                )
+            val = self._parse_scaled_bytes_input(
+                max_traffic_str,
+                tab.max_traffic_unit.currentIndex(),
+                tr("custom_rule_max_traffic_name", "最大流量阈值")
+            )
+            if val is None:
                 return
+            base_cmd += ["--rule-max-traffic", str(val)]
 
         self.task_handler.execute_command(base_cmd, task_type="custom-rule", generate_graph=True,
                                           graph_name="custom_rule")

@@ -1,7 +1,7 @@
 # gui/task_handler.py
 import re
 
-from PyQt6.QtCore import QObject, QTime
+from PyQt6.QtCore import QObject, QTime, QTimer
 
 from .translator import tr, translate_backend_output, translate_violation_reason
 from .worker import AnalyzerWorker
@@ -9,6 +9,39 @@ from .worker import AnalyzerWorker
 
 class TaskHandler(QObject):
     """负责所有后端任务的启动、输出处理和结果解析"""
+
+    EMPTY_RESULT_MESSAGES = {
+        "flow-sort": (
+            "empty_flow_sort_title",
+            "empty_flow_sort_content",
+            "未找到流量排序结果",
+            "本次流量排序没有生成可展示的记录。请检查数据文件是否包含有效通信会话，或调整筛选条件后重试。"
+        ),
+        "port-scan": (
+            "empty_port_scan_title",
+            "empty_port_scan_content",
+            "未找到端口扫描目标",
+            "本次端口扫描检测没有发现符合阈值的可疑扫描者。您可以查看运行日志，或适当降低端口数、出流量占比等阈值后重试。"
+        ),
+        "ddos-target": (
+            "empty_ddos_title",
+            "empty_ddos_content",
+            "未找到DDoS攻击目标",
+            "本次 DDoS 目标检测没有发现符合阈值的目标。您可以查看运行日志，或适当降低入方向源数、入流量、入流量占比等阈值后重试。"
+        ),
+        "star-structures": (
+            "empty_star_title",
+            "empty_star_content",
+            "未找到星型结构",
+            "本次星型结构查找没有发现符合阈值的中心节点。您可以查看运行日志，或适当降低叶子节点阈值后重试。"
+        ),
+        "custom-rule": (
+            "empty_custom_rule_title",
+            "empty_custom_rule_content",
+            "未找到违规记录",
+            "本次自定义规则检测没有发现违规通信记录。您可以查看运行日志，或调整目标 IP、IP 范围、协议、端口等规则条件后重试。"
+        ),
+    }
 
     def __init__(self, main_window):
         super().__init__(main_window)
@@ -117,6 +150,21 @@ class TaskHandler(QObject):
             self.main.show_output_route("table")
         elif len(self.main.result_detail.toPlainText()) > 0:
             self.main.show_output_route("detail")
+        else:
+            self.main.show_output_route("log")
+            self.show_empty_result_notice()
+
+    def show_empty_result_notice(self):
+        message = self.EMPTY_RESULT_MESSAGES.get(self.current_task_type)
+        if not message:
+            return
+
+        title_key, content_key, title_fallback, content_fallback = message
+        title = tr(title_key, title_fallback)
+        content = tr(content_key, content_fallback)
+        self.main.log_text.append(tr("task_empty_result_log", "未找到可展示结果：{}").format(title))
+        self.main._suppress_next_empty_graph_notice = True
+        QTimer.singleShot(0, lambda: self.main._show_warning_dialog(title, content))
 
     def parse_custom_rule_to_table(self):
         """将自定义规则检测结果填入表格"""
@@ -452,7 +500,8 @@ class TaskHandler(QObject):
                 metric_pattern = r'risk=([\d.]+)' if strategy == "最小风险" else r'(?:congestion|risk)=([\d.]+)'
                 metric_match = re.search(metric_pattern, line)
                 if metric_match:
-                    label_key = "compare_paths_risk_label" if strategy in ("最小跳数", "最小风险") else "compare_paths_congestion_label"
+                    label_key = "compare_paths_risk_label" if strategy in ("最小跳数",
+                                                                           "最小风险") else "compare_paths_congestion_label"
                     label_fallback = "风险值: {}" if strategy in ("最小跳数", "最小风险") else "拥塞值: {}"
                     formatted += f" <span style='color:#7f8c8d;'>({tr(label_key, label_fallback).format(metric_match.group(1))})</span>"
                 html += f"<p style='margin-left:20px; font-family:monospace;'>{formatted}</p>"
