@@ -11,6 +11,30 @@
 
 using namespace std;
 
+namespace {
+    vector<pair<int, int> > buildStaticRanges(const int itemCount, const unsigned int threadCount) {
+        vector<pair<int, int> > ranges;
+        if (itemCount <= 0 || threadCount == 0) {
+            return ranges;
+        }
+
+        ranges.reserve(threadCount);
+        const int base = itemCount / static_cast<int>(threadCount);
+        const int remainder = itemCount % static_cast<int>(threadCount);
+        int start = 0;
+        for (unsigned int index = 0; index < threadCount; ++index) {
+            const int items = static_cast<int>(index) < remainder ? base + 1 : base;
+            const int end = start + items - 1;
+            if (start > end) {
+                break;
+            }
+            ranges.emplace_back(start, end);
+            start = end + 1;
+        }
+        return ranges;
+    }
+}
+
 size_t Graph::getEdgeCount() const {
     size_t edgeCount = 0;
     for (int index = 0; index < verticesList.getVertexCount(); ++index) {
@@ -118,20 +142,14 @@ set<PortScanner> Graph::detectPortScanners(const int portThreshold,
         );
     }
 
-    vector<future<set<PortScanner> > > futures;
-    const int base = n / static_cast<int>(threadCount);
-    const int remainder = n % static_cast<int>(threadCount);
-    int start = 0;
-    int end = -1;
+    vector<future<vector<PortScanner> > > futures;
+    const auto ranges = buildStaticRanges(n, threadCount);
 
-    for (int i = 0; i < static_cast<int>(threadCount); ++i) {
-        const int nodesToRead = i < remainder ? base + 1 : base;
-        start = end + 1;
-        end = start + nodesToRead - 1;
-        if (start > end) break;
+    for (const auto &[start, end]: ranges) {
         futures.push_back(std::async(std::launch::async,
                                      [this, start, end, portThreshold, outRatioThreshold, minTraffic]() {
-                                         set<PortScanner> localScanners;
+                                         vector<PortScanner> localScanners;
+                                         localScanners.reserve(max(1, end - start + 1));
                                          for (int i = start; i <= end; ++i) {
                                              const long long inData = verticesList.getTotalInData(i);
                                              const long long outData = verticesList.getTotalOutData(i);
@@ -142,28 +160,29 @@ set<PortScanner> Graph::detectPortScanners(const int portThreshold,
                                                      static_cast<double>(outData) / static_cast<double>(totalData);
                                              if (outRatio < outRatioThreshold) continue;
 
-                                             const auto &edges = verticesList.getEdges(i); // 获取当前节点的所有出边
+                                             const auto &edges = verticesList.getEdges(i);
                                              int maxPortsToOneTarget = 0;
-                                             unordered_map<uint16_t, set<int> > targetsByDstPort;
+                                             unordered_map<uint16_t, int> targetsByDstPort;
 
                                              for (const int edgeIdx: edges.getAllEdgeIndices()) {
                                                  const auto &edgeInfo = edges.getEdgeInfo(edgeIdx);
 
-                                                 set<uint16_t> uniqueDstPorts;
+                                                 unordered_set<uint16_t> uniqueDstPorts;
                                                  for (const auto &stats: edgeInfo.protocolStats | std::views::values) {
                                                      for (const auto &[srcPort, dstPort]: stats.ports) {
                                                          uniqueDstPorts.insert(dstPort);
-                                                         targetsByDstPort[dstPort].insert(edgeInfo.dstIndex);
                                                      }
                                                  }
                                                  maxPortsToOneTarget = max(
                                                      maxPortsToOneTarget, static_cast<int>(uniqueDstPorts.size()));
+                                                 for (const auto dstPort: uniqueDstPorts) {
+                                                     ++targetsByDstPort[dstPort];
+                                                 }
                                              }
 
                                              int maxTargetsForOnePort = 0;
-                                             for (const auto &[dstPort, targets]: targetsByDstPort) {
-                                                 maxTargetsForOnePort = max(
-                                                     maxTargetsForOnePort, static_cast<int>(targets.size()));
+                                             for (const auto &[dstPort, targetCount]: targetsByDstPort) {
+                                                 maxTargetsForOnePort = max(maxTargetsForOnePort, targetCount);
                                              }
 
                                              const bool verticalScan = maxPortsToOneTarget > portThreshold;
@@ -172,7 +191,7 @@ set<PortScanner> Graph::detectPortScanners(const int portThreshold,
                                                  string scanType = "vertical";
                                                  if (verticalScan && horizontalScan) scanType = "mixed";
                                                  else if (horizontalScan) scanType = "horizontal";
-                                                 localScanners.insert({
+                                                 localScanners.push_back({
                                                      verticesList.getIP(i),
                                                      maxPortsToOneTarget,
                                                      maxTargetsForOnePort,
@@ -189,7 +208,9 @@ set<PortScanner> Graph::detectPortScanners(const int portThreshold,
     set<PortScanner> scanners;
     for (auto &f: futures) {
         const auto local = f.get();
-        scanners.insert(local.begin(), local.end());
+        for (const auto &scanner: local) {
+            scanners.insert(scanner);
+        }
     }
 
     if (progressCallback) {
@@ -215,45 +236,32 @@ set<DDoSTarget> Graph::detectDDoSTargets(const int sourceThreshold,
         );
     }
 
-    vector<vector<int> > incomingCountsByThread(threadCount, vector<int>(n, 0));
-    vector<future<void> > futures;
-    const int base = n / static_cast<int>(threadCount);
-    const int remainder = n % static_cast<int>(threadCount);
-    int start = 0;
-    int end = -1;
-    for (int i = 0; i < static_cast<int>(threadCount); ++i) {
-        const int nodesToRead = i < remainder ? base + 1 : base;
-        start = end + 1;
-        end = start + nodesToRead - 1;
-        if (start > end) break;
-        futures.push_back(std::async(std::launch::async, [this, start, end, &incomingCountsByThread, i]() {
-            auto &localCounts = incomingCountsByThread[i];
+    vector<int> incomingCounts(n, 0);
+    vector<future<unordered_map<int, int> > > countFutures;
+    const auto ranges = buildStaticRanges(n, threadCount);
+    for (const auto &[start, end]: ranges) {
+        countFutures.push_back(std::async(std::launch::async, [this, start, end]() {
+            unordered_map<int, int> localCounts;
+            localCounts.reserve(max(16, (end - start + 1) * 2));
             for (int src = start; src <= end; ++src) {
                 const auto &edges = verticesList.getEdges(src);
                 for (const int edgeIdx: edges.getAllEdgeIndices()) {
                     ++localCounts[edges.getEdgeInfo(edgeIdx).dstIndex];
                 }
             }
+            return localCounts;
         }));
     }
-    for (auto &f: futures) f.wait();
-
-    vector<int> incomingCounts(n, 0);
-    for (const auto &localCounts: incomingCountsByThread) {
-        for (int i = 0; i < n; ++i) incomingCounts[i] += localCounts[i];
+    for (auto &future: countFutures) {
+        for (const auto &[dstIndex, count]: future.get()) {
+            incomingCounts[dstIndex] += count;
+        }
     }
 
     if (progressCallback) progressCallback("进度: DDoS 入方向邻居统计完成，正在筛选目标...");
 
-    futures.clear();
     vector<future<set<DDoSTarget> > > targetFutures;
-    start = 0;
-    end = -1;
-    for (int i = 0; i < static_cast<int>(threadCount); ++i) {
-        const int nodesToRead = i < remainder ? base + 1 : base;
-        start = end + 1;
-        end = start + nodesToRead - 1;
-        if (start > end) break;
+    for (const auto &[start, end]: ranges) {
         targetFutures.push_back(std::async(std::launch::async, [this, start, end, sourceThreshold, inDataThreshold,
                                                inRatioThreshold, &incomingCounts]() {
                                                set<DDoSTarget> localTargets;
@@ -434,6 +442,10 @@ vector<StarStructure> Graph::findStarStructures(const int degreeThreshold,
     const auto neighbors = analyzeNeighbors(numThreads, progressCallback); // 获取图中每个节点的邻居信息列表
     const int n = static_cast<int>(neighbors.size());
     const unsigned int threadCount = effectiveThreadCount(numThreads, n);
+    vector<char> isLeaf(n, false);
+    for (int i = 0; i < n; ++i) {
+        isLeaf[i] = neighbors[i].size() == 1;
+    }
     if (progressCallback) {
         progressCallback(
             "进度: 星型结构筛选开始，节点数=" + to_string(n) +
@@ -442,29 +454,27 @@ vector<StarStructure> Graph::findStarStructures(const int degreeThreshold,
     }
 
     vector<future<vector<StarStructure> > > futures;
-    const int base = n / static_cast<int>(threadCount);
-    const int remainder = n % static_cast<int>(threadCount);
-    int start = 0;
-    int end = -1;
-    for (int i = 0; i < static_cast<int>(threadCount); ++i) {
-        const int nodesToRead = i < remainder ? base + 1 : base;
-        start = end + 1;
-        end = start + nodesToRead - 1;
-        if (start > end) break;
-        futures.push_back(std::async(std::launch::async, [this, start, end, degreeThreshold, &neighbors]() {
+    const auto ranges = buildStaticRanges(n, threadCount);
+    for (const auto &[start, end]: ranges) {
+        futures.push_back(std::async(std::launch::async, [this, start, end, degreeThreshold, &neighbors, &isLeaf]() {
             vector<StarStructure> localStars;
+            localStars.reserve(max(1, (end - start + 1) / 8));
             for (int i = start; i <= end; ++i) {
                 const auto &currNeighbors = neighbors[i];
+                if (currNeighbors.size() <= static_cast<size_t>(degreeThreshold)) {
+                    continue;
+                }
 
                 const IPAddress centerNode = verticesList.getIP(i); // 中心节点的IP地址
                 const long long inData = verticesList.getTotalInData(i);
                 const long long outData = verticesList.getTotalOutData(i);
                 const long long totalData = inData + outData; // 中心节点与邻居节点之间的总流量
-                vector<pair<IPAddress, long long> > neighborIPs; // 存储满足条件的邻居节点的IP地址列表和与中心节点之间的流量
+                vector<pair<IPAddress, long long> > neighborIPs;
+                neighborIPs.reserve(currNeighbors.size());
 
                 int totalLeaves = 0;
                 for (const auto &[neighborIndex, info]: currNeighbors) {
-                    if (neighbors[neighborIndex].size() == 1) {
+                    if (isLeaf[neighborIndex]) {
                         totalLeaves++;
                         const long long leafData = info.InData + info.OutData;
                         neighborIPs.emplace_back(verticesList.getIP(neighborIndex), leafData);

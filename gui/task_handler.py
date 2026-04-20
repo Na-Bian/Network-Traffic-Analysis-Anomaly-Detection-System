@@ -111,7 +111,11 @@ class TaskHandler(QObject):
             payload["output_json"] = json_path
 
         def on_success(result):
+            has_table_result = self.main.result_table.rowCount() > 0
+            has_detail_result = len(self.main.result_detail.toPlainText().strip()) > 0
             if generate_graph:
+                if task_type != "full-graph" and not has_table_result and not has_detail_result:
+                    return
                 self.main.generate_html(json_path, html_path)
 
         self.run_backend_task(payload, task_type=task_type, on_success=on_success, clear_log=clear_log)
