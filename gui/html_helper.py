@@ -3,8 +3,8 @@ import os
 import re
 
 from PyQt6.QtCore import QUrl
-from qfluentwidgets import isDarkTheme
 
+from qfluentwidgets import isDarkTheme
 from .utils import resource_path
 
 

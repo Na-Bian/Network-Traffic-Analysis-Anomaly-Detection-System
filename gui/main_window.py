@@ -10,6 +10,9 @@ from PyQt6.QtGui import *
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import *
+
+from backend.readPcap import save_to_csv
+from backend.subgraph import generate_html as generate_graph_html
 from qfluentwidgets import (
     Action,
     BodyLabel,
@@ -38,7 +41,19 @@ from qfluentwidgets import (
     qconfig,
     setTheme,
 )
-
+from .app_settings import (
+    APP_VERSION,
+    APP_VERSION_DISPLAY,
+    GITHUB_RELEASES_URL,
+    GITHUB_REPOSITORY_URL,
+    build_ui_font,
+    build_ui_font_families,
+    check_latest_release,
+    first_available_font_family,
+    load_app_preferences,
+    save_app_preferences,
+    ui_font_choices,
+)
 from .html_helper import get_theme_colors, generate_placeholder_html, replace_cdn_with_local
 from .tabs.anomaly_tabs import AnomalyTab
 from .tabs.custom_rule_tab import CustomRuleTab
@@ -47,10 +62,8 @@ from .tabs.path_tab import PathTab
 from .tabs.subgraph_tab import SubgraphTab
 from .task_handler import TaskHandler
 from .task_pipeline import TaskPipeline
-from .translator import tr, lang_mgr
+from .translator import tr, lang_mgr, translate_backend_output
 from .utils import resource_path, core_executable_path, TempDirManager
-from backend.readPcap import save_to_csv
-from backend.subgraph import generate_html as generate_graph_html
 
 
 class AdaptiveTabWidget(QTabWidget):
@@ -314,11 +327,14 @@ _patch_ms_navigation_bar_metrics()
 
 
 class MainWindow(MSFluentWindow):
+    def _append_translated_log(self, message):
+        self.log_text.append(translate_backend_output(str(message)))
+
     def __init__(self):
-        qconfig.set(qconfig.fontFamilies, ["Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Segoe UI"])
         super().__init__()
         self.setObjectName("NetworkAnalyzerWindow")
-        self.setFont(QFont("Microsoft YaHei UI", 10))
+        self.app_preferences = load_app_preferences()
+        self.setFont(build_ui_font(self.app_preferences.ui_font_family, 10))
         self.workbench_interface = None
         self.web_view = None
         self._centered_on_first_show = False
@@ -363,11 +379,19 @@ class MainWindow(MSFluentWindow):
         self.open_command_button = None
         self.manual_command_button = None
         self.title_back_button = None
+        self.font_card = None
+        self.font_label = None
+        self.font_combo = None
+        self.font_hint_label = None
+        self.reset_font_btn = None
+        self.check_update_btn = None
 
         self.pipeline = TaskPipeline(self)
         self.task_handler = TaskHandler(self, self.pipeline)  # 任务处理器
 
         self.init_ui()
+        self._sync_font_combo_selection(self.font().family())
+        self._update_font_hint_label(self.font().family())
         self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
         QApplication.instance().paletteChanged.connect(self.on_palette_changed)
         qconfig.themeChangedFinished.connect(self._refresh_theme_visuals)
@@ -443,7 +467,7 @@ class MainWindow(MSFluentWindow):
             shutil.copy2(original_html_path, display_html_path)
             # 注入样式并替换CDN
             replace_cdn_with_local(display_html_path, bgcolor, fontcolor,
-                                   log_callback=lambda msg: self.log_text.append(msg))
+                                   log_callback=self._append_translated_log)
         except Exception as e:
             self.log_text.append(tr("prepare_html_failed", "准备HTML显示文件失败: {}").format(e))
             return original_html_path  # 失败时回退到原文件
@@ -538,16 +562,24 @@ class MainWindow(MSFluentWindow):
         self.lang_zh_tw_btn.setText(tr("lang_zh_TW", "繁体中文"))
         self.lang_en_btn.setText(tr("lang_en_US", "English"))
         self.manual_btn.setText(tr("help_manual", "用户手册"))
+        self.check_update_btn.setText(tr("check_updates", "检查更新"))
         self.about_btn.setText(tr("about", "关于"))
         self.theme_card.title_label.setText(tr("settings_theme_title", "外观主题"))
         self.theme_card.subtitle_label.setText(tr("settings_theme_desc", "手动切换浅色、深色，或跟随系统设置。"))
         self.runtime_card.title_label.setText(tr("settings_runtime_title", "运行参数"))
         self.runtime_card.subtitle_label.setText(tr("settings_runtime_desc", "调整后端分析任务使用的线程数量。"))
+        self.font_card.title_label.setText(tr("settings_font_title", "界面字体"))
+        self.font_card.subtitle_label.setText(
+            tr("settings_font_desc", "为界面选择首选显示字体。")
+        )
         self.language_card.title_label.setText(tr("language", "语言 / Language"))
         self.language_card.subtitle_label.setText(tr("settings_language_desc", "语言切换会立即更新界面文本。"))
         self.help_card.title_label.setText(tr("help", "帮助"))
         self.help_card.subtitle_label.setText(tr("settings_help_desc", "查看用户手册或软件版本信息。"))
         self.theme_label.setText(tr("settings_theme_label", "主题:"))
+        self.font_label.setText(tr("settings_font_label", "字体:"))
+        self.reset_font_btn.setText(tr("settings_font_reset", "恢复默认"))
+        self._update_font_hint_label(self.app_preferences.ui_font_family)
         with QSignalBlocker(self.theme_combo):
             self.theme_combo.setItemText(0, tr("settings_theme_auto", "跟随系统"))
             self.theme_combo.setItemText(1, tr("settings_theme_light", "浅色"))
@@ -838,6 +870,8 @@ class MainWindow(MSFluentWindow):
 
         if self.manual_btn is not None:
             self.manual_btn.setMinimumWidth(max(110, min(154, text_width(self.manual_btn.text()) + 44)))
+        if self.check_update_btn is not None:
+            self.check_update_btn.setMinimumWidth(max(116, min(170, text_width(self.check_update_btn.text()) + 44)))
         if self.about_btn is not None:
             self.about_btn.setMinimumWidth(max(92, min(132, text_width(self.about_btn.text()) + 44)))
 
@@ -1503,6 +1537,42 @@ class MainWindow(MSFluentWindow):
         self.runtime_card.card_layout.addLayout(runtime_layout)
         layout.addWidget(self.runtime_card)
 
+        self.font_card = self._create_card(
+            tr("settings_font_title", "界面字体"),
+            tr("settings_font_desc", "为界面选择首选显示字体。")
+        )
+        self.font_card.setObjectName("settingsSecondaryCard")
+        font_layout = QVBoxLayout()
+        font_layout.setSpacing(8)
+        font_row = QHBoxLayout()
+        font_row.setSpacing(10)
+        font_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.font_label = BodyLabel(tr("settings_font_label", "字体:"))
+        self.font_combo = FluentComboBox()
+        self.font_combo.setMinimumWidth(320)
+        combo_height = max(34, self.font_combo.sizeHint().height())
+        self.font_combo.setFixedHeight(combo_height)
+        for family in ui_font_choices():
+            self.font_combo.addItem(family, family)
+        saved_font_family = self.app_preferences.ui_font_family.strip()
+        current_family = saved_font_family or first_available_font_family(build_ui_font_families(""))
+        current_index = max(0, self.font_combo.findData(current_family))
+        self.font_combo.setCurrentIndex(current_index)
+        self.font_combo.currentIndexChanged.connect(self._on_ui_font_changed)
+        self.reset_font_btn = PushButton(tr("settings_font_reset", "恢复默认"))
+        self.reset_font_btn.setFixedHeight(combo_height)
+        self.reset_font_btn.clicked.connect(self._reset_ui_font)
+        font_row.addWidget(self.font_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        font_row.addWidget(self.font_combo, 1, Qt.AlignmentFlag.AlignVCenter)
+        font_row.addWidget(self.reset_font_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.font_hint_label = CaptionLabel()
+        self.font_hint_label.setWordWrap(True)
+        self._update_font_hint_label(saved_font_family)
+        font_layout.addLayout(font_row)
+        font_layout.addWidget(self.font_hint_label)
+        self.font_card.card_layout.addLayout(font_layout)
+        layout.addWidget(self.font_card)
+
         self.language_card = self._create_card(
             tr("language", "语言 / Language"),
             tr("settings_language_desc", "语言切换会立即更新界面文本。")
@@ -1532,17 +1602,182 @@ class MainWindow(MSFluentWindow):
         self.help_card.setObjectName("settingsSecondaryCard")
         help_layout = QHBoxLayout()
         self.manual_btn = PushButton(FIF.HELP, tr("help_manual", "用户手册"))
+        self.check_update_btn = PushButton(FIF.SYNC, tr("check_updates", "检查更新"))
         self.about_btn = PushButton(FIF.INFO, tr("about", "关于"))
         self.manual_btn.setFixedHeight(30)
+        self.check_update_btn.setFixedHeight(30)
         self.about_btn.setFixedHeight(30)
         self.manual_btn.clicked.connect(self.show_manual)
+        self.check_update_btn.clicked.connect(self.check_for_updates)
         self.about_btn.clicked.connect(self.about)
         help_layout.addWidget(self.manual_btn)
+        help_layout.addWidget(self.check_update_btn)
         help_layout.addWidget(self.about_btn)
         help_layout.addStretch()
         self.help_card.card_layout.addLayout(help_layout)
         layout.addWidget(self.help_card)
         layout.addStretch()
+
+    def _find_font_combo_index(self, family: str | None) -> int:
+        if self.font_combo is None:
+            return -1
+
+        target = str(family or "").strip()
+        if not target:
+            return -1
+
+        exact_index = self.font_combo.findData(target)
+        if exact_index >= 0:
+            return exact_index
+
+        normalized_target = target.casefold()
+        for index in range(self.font_combo.count()):
+            item_family = str(self.font_combo.itemData(index) or self.font_combo.itemText(index)).strip()
+            if item_family.casefold() == normalized_target:
+                return index
+        return -1
+
+    def _sync_font_combo_selection(self, family: str | None) -> None:
+        if self.font_combo is None:
+            return
+
+        index = self._find_font_combo_index(family)
+        if index < 0:
+            return
+
+        with QSignalBlocker(self.font_combo):
+            self.font_combo.setCurrentIndex(index)
+
+    def _apply_font_to_safe_widgets(self, font: QFont) -> None:
+        self.setFont(font)
+        if hasattr(self, "titleBar") and self.titleBar is not None:
+            self.titleBar.setFont(font)
+
+        for child in self.findChildren(QWidget):
+            if isinstance(child, QWebEngineView):
+                continue
+
+            parent = child.parentWidget()
+            skip_due_to_webview = False
+            while parent is not None:
+                if isinstance(parent, QWebEngineView):
+                    skip_due_to_webview = True
+                    break
+                parent = parent.parentWidget()
+
+            if skip_due_to_webview:
+                continue
+
+            child.setFont(font)
+
+    def _apply_ui_font(self, family: str | None, *, save: bool) -> None:
+        selected_family = str(family or "").strip()
+        app_font = build_ui_font(selected_family, 10)
+        qconfig.set(qconfig.fontFamilies, build_ui_font_families(selected_family))
+        self._apply_font_to_safe_widgets(app_font)
+        applied_family = app_font.family().strip()
+        self.app_preferences.ui_font_family = applied_family or selected_family
+        if save:
+            save_app_preferences(self.app_preferences)
+        self._sync_font_combo_selection(applied_family or selected_family)
+        self._update_font_hint_label(applied_family or selected_family)
+        self._refresh_compact_control_widths()
+        self._refresh_titlebar_layout()
+        self._refresh_dashboard_headline_metrics()
+        self.update()
+        self.repaint()
+        self.retranslate_ui()
+
+    def _on_ui_font_changed(self, _index: int) -> None:
+        if self.font_combo is None:
+            return
+        selected_family = str(self.font_combo.currentData() or self.font_combo.currentText()).strip()
+        self._apply_ui_font(selected_family, save=True)
+
+    def _reset_ui_font(self) -> None:
+        default_family = first_available_font_family(build_ui_font_families(""))
+        self._sync_font_combo_selection(default_family)
+        self._apply_ui_font("", save=True)
+
+    def _update_font_hint_label(self, family: str | None) -> None:
+        if self.font_hint_label is None:
+            return
+
+        selected_family = str(family or "").strip()
+        fallback_chain = " / ".join(build_ui_font_families(""))
+        if not selected_family:
+            self.font_hint_label.setText(
+                tr("settings_font_hint_default", "当前使用默认字体链：{}").format(fallback_chain)
+            )
+            return
+
+        self.font_hint_label.setText(
+            tr("settings_font_hint_selected", "当前优先字体：{}").format(selected_family)
+        )
+
+    def check_for_updates(self) -> None:
+        if self.check_update_btn is not None:
+            self.check_update_btn.setEnabled(False)
+            self.check_update_btn.setText(tr("checking_updates", "正在检查..."))
+
+        self.pipeline.run_callable(
+            check_latest_release,
+            on_success=self._handle_update_check_result,
+            on_error=self._handle_update_check_error,
+            on_finished=self._restore_update_button,
+        )
+
+    def _restore_update_button(self) -> None:
+        if self.check_update_btn is None:
+            return
+        self.check_update_btn.setEnabled(True)
+        self.check_update_btn.setText(tr("check_updates", "检查更新"))
+
+    def _handle_update_check_error(self, message: str) -> None:
+        self._show_error_dialog(
+            tr("update_check_failed_title", "检查更新失败"),
+            tr("update_check_failed_body", "无法获取 GitHub 最新 Release 信息。\n\n{}").format(message),
+        )
+
+    def _handle_update_check_result(self, result: dict) -> None:
+        status = str((result or {}).get("status") or "")
+        if status == "no_release":
+            self._show_fluent_dialog(
+                tr("update_no_release_title", "暂未发布 Release"),
+                tr("update_no_release_body", "当前版本：{}\nGitHub 仓库暂未发布正式 Release。").format(APP_VERSION),
+            )
+            return
+
+        current_version = str(result.get("current_version") or APP_VERSION)
+        latest_version = str(result.get("latest_version") or current_version)
+        release_name = str(result.get("release_name") or latest_version)
+        published_at = str(result.get("published_at") or tr("not_available", "暂无"))
+        html_url = str(result.get("html_url") or GITHUB_RELEASES_URL)
+        lines = [
+            tr("update_current_version", "当前版本：{}").format(current_version),
+            tr("update_latest_version", "最新版本：{}").format(latest_version),
+            tr("update_release_name", "Release 名称：{}").format(release_name),
+            tr("update_published_at", "发布时间：{}").format(published_at),
+        ]
+
+        if status == "update_available":
+            box = MessageBox(
+                tr("update_available_title", "发现新版本"),
+                "\n".join(lines),
+                self,
+            )
+            box.yesButton.setText(tr("open_release_page", "打开 Release 页面"))
+            box.cancelButton.setText(tr("close", "关闭"))
+            box.setMinimumWidth(500)
+            if box.exec():
+                QDesktopServices.openUrl(QUrl(html_url))
+            return
+
+        self._show_fluent_dialog(
+            tr("update_latest_title", "当前已是最新版本"),
+            "\n".join(lines),
+            level="success",
+        )
 
     def _on_theme_changed(self):
         theme = ["auto", "light", "dark"][max(0, min(self.theme_combo.currentIndex(), 2))]
@@ -1750,7 +1985,7 @@ class MainWindow(MSFluentWindow):
         self.pipeline.load_dataset(
             file_path,
             self.thread_spin.value(),
-            on_output=lambda message: self.log_text.append(str(message)),
+            on_output=self._append_translated_log,
             on_error=on_load_error,
             on_success=on_load_success,
         )
@@ -1764,7 +1999,8 @@ class MainWindow(MSFluentWindow):
         self.is_data_available = False
         self.pipeline.restart_backend_session()
         self.log_text.append(
-            tr("thread_count_reload", "线程数已变更为 {}，旧图模型缓存已失效，请重新执行分析或重新加载数据。").format(value)
+            tr("thread_count_reload", "线程数已变更为 {}，旧图模型缓存已失效，请重新执行分析或重新加载数据。").format(
+                value)
         )
 
     def convert_pcap(self, pcap_path):
@@ -1795,7 +2031,7 @@ class MainWindow(MSFluentWindow):
                 setattr(self, 'is_data_available', False),
                 self._set_dashboard_status("dashboard_invalid", "数据不可用")
             ],
-            on_progress=lambda message: self.log_text.append(str(message)),
+            on_progress=self._append_translated_log,
         )
 
     def export_pcap_csv(self):
@@ -1934,7 +2170,7 @@ class MainWindow(MSFluentWindow):
                 # 复制原始文件到显示文件，然后替换
                 shutil.copy2(html_path, display_html_path)
                 replace_cdn_with_local(display_html_path, bgcolor, fontcolor,
-                                       log_callback=lambda msg: self.log_text.append(msg))
+                                       log_callback=self._append_translated_log)
                 # 加载显示文件
                 self.display_html(display_html_path)
                 self.log_text.append(tr("generate_html_success", "图表渲染完成！"))
@@ -1955,13 +2191,13 @@ class MainWindow(MSFluentWindow):
             render_options=self._render_options(),
             data=data,
             on_success=on_render_success,
-            on_error=lambda e: self.log_text.append(f"生成子图失败: {e}"),
-            on_progress=lambda message: self.log_text.append(str(message)),
+            on_error=lambda e: self._append_translated_log(f"生成子图失败: {e}"),
+            on_progress=self._append_translated_log,
         )
 
     def _handle_render_info(self, message):
         if not message.startswith("render_mode:"):
-            self.log_text.append(message)
+            self._append_translated_log(message)
             return
         _, renderer, mode, nodes, edges = message.split(":", 4)
         mode_label = {
@@ -2698,6 +2934,7 @@ class MainWindow(MSFluentWindow):
         dialog.setWindowTitle(tr("about", "关于"))
         dialog.resize(720, 430)
         dialog.setWindowIcon(QIcon(resource_path("resources/icon.ico")))
+        dialog.setFont(self.font())
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(24, 18, 24, 18)
@@ -2751,42 +2988,50 @@ class MainWindow(MSFluentWindow):
 
         name_label = QLabel(tr("app_title", "网络流量分析与异常检测系统"))
         name_label.setObjectName("aboutName")
-        build_label = QLabel(tr("about_version", "版本 2.1 | 2026年4月"))
+        name_label.setFont(self.font())
+        build_label = QLabel(tr("about_version", "版本 {} | 2026年4月").format(APP_VERSION_DISPLAY))
         build_label.setObjectName("aboutBuild")
+        build_label.setFont(self.font())
         build_label.setWordWrap(True)
 
         subtitle_label = QLabel(tr("about_subtitle", "华中科技大学网络空间安全学院 · 程序设计综合课程设计"))
         subtitle_label.setObjectName("aboutParagraph")
+        subtitle_label.setFont(self.font())
         subtitle_label.setWordWrap(True)
 
         intro_label = QLabel(tr("about_intro", "一个面向课程设计与工程化演示的网络流量分析桌面应用。"))
         intro_label.setObjectName("aboutMuted")
+        intro_label.setFont(self.font())
         intro_label.setWordWrap(True)
 
         stack_label = QLabel(
             f"{tr('about_stack_label', '技术栈')}: {tr('about_stack_value', 'C++ · PyQt6 · PyQt-Fluent-Widgets')}"
         )
         stack_label.setObjectName("aboutParagraph")
+        stack_label.setFont(self.font())
         stack_label.setWordWrap(True)
 
         focus_label = QLabel(
             f"{tr('about_focus_label', '定位')}: {tr('about_focus_value', '网络流量分析、异常检测与拓扑可视化')}"
         )
         focus_label.setObjectName("aboutParagraph")
+        focus_label.setFont(self.font())
         focus_label.setWordWrap(True)
 
         github_label = QLabel(
-            f"GitHub: <a href=\"https://github.com/Na-Bian/Network-Traffic-Analysis-Anomaly-Detection-System\" "
+            f"GitHub: <a href=\"{GITHUB_REPOSITORY_URL}\" "
             f"style=\"color:{accent}; text-decoration:none;\">"
             "Na-Bian/Network-Traffic-Analysis-Anomaly-Detection-System</a>"
         )
         github_label.setObjectName("aboutLink")
+        github_label.setFont(self.font())
         github_label.setTextFormat(Qt.TextFormat.RichText)
         github_label.setOpenExternalLinks(True)
         github_label.setWordWrap(True)
 
         copyright_label = QLabel(tr("about_copyright_value", "©2026 那，边。版权所有。"))
         copyright_label.setObjectName("aboutMuted")
+        copyright_label.setFont(self.font())
         copyright_label.setWordWrap(True)
 
         text_col.addWidget(name_label)
@@ -2810,18 +3055,19 @@ class MainWindow(MSFluentWindow):
         footer = QHBoxLayout()
         footer.addStretch()
         copy_close_btn = PushButton(tr("about_copy_and_close", "复制并关闭"))
+        copy_close_btn.setFont(self.font())
         copy_close_btn.setFixedWidth(132)
         copy_close_btn.clicked.connect(
             lambda: (
                 QApplication.clipboard().setText(
                     "\n".join([
                         tr("app_title", "网络流量分析与异常检测系统"),
-                        tr("about_version", "版本 2.1 | 2026年4月"),
+                        tr("about_version", "版本 {} | 2026年4月").format(APP_VERSION_DISPLAY),
                         tr("about_subtitle", "华中科技大学网络空间安全学院 · 程序设计综合课程设计"),
                         tr("about_intro", "一个面向课程设计与工程化演示的网络流量分析桌面应用。"),
                         f"{tr('about_stack_label', '技术栈')}: {tr('about_stack_value', 'C++ · PyQt6 · PyQt-Fluent-Widgets')}",
                         f"{tr('about_focus_label', '定位')}: {tr('about_focus_value', '网络流量分析、异常检测与拓扑可视化')}",
-                        "GitHub: https://github.com/Na-Bian/Network-Traffic-Analysis-Anomaly-Detection-System",
+                        f"GitHub: {GITHUB_REPOSITORY_URL}",
                         tr("about_copyright_value", "©2026 那，边。版权所有。"),
                     ])
                 ),
@@ -2830,6 +3076,7 @@ class MainWindow(MSFluentWindow):
         )
         footer.addWidget(copy_close_btn)
         close_btn = PushButton(tr("close", "关闭"))
+        close_btn.setFont(self.font())
         close_btn.setFixedWidth(104)
         close_btn.clicked.connect(dialog.accept)
         footer.addWidget(close_btn)

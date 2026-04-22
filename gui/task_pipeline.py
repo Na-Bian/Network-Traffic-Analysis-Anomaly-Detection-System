@@ -120,14 +120,14 @@ class BackendSessionClient(QObject):
         self._dataset_metadata = None
 
     def load_dataset(
-        self,
-        input_file: str,
-        threads: int,
-        *,
-        on_output: Callable[[str], None] | None = None,
-        on_error: Callable[[str], None] | None = None,
-        on_success: Callable[[SessionResult], None] | None = None,
-        on_finished: Callable[[SessionResult], None] | None = None,
+            self,
+            input_file: str,
+            threads: int,
+            *,
+            on_output: Callable[[str], None] | None = None,
+            on_error: Callable[[str], None] | None = None,
+            on_success: Callable[[SessionResult], None] | None = None,
+            on_finished: Callable[[SessionResult], None] | None = None,
     ) -> str | None:
         try:
             signature = (os.path.abspath(input_file), int(os.path.getmtime(input_file)), int(threads))
@@ -168,13 +168,13 @@ class BackendSessionClient(QObject):
         return request_id
 
     def run_task(
-        self,
-        payload: dict[str, Any],
-        *,
-        on_output: Callable[[str], None] | None = None,
-        on_error: Callable[[str], None] | None = None,
-        on_success: Callable[[SessionResult], None] | None = None,
-        on_finished: Callable[[SessionResult], None] | None = None,
+            self,
+            payload: dict[str, Any],
+            *,
+            on_output: Callable[[str], None] | None = None,
+            on_error: Callable[[str], None] | None = None,
+            on_success: Callable[[SessionResult], None] | None = None,
+            on_finished: Callable[[SessionResult], None] | None = None,
     ) -> str | None:
         request = dict(payload)
         request["action"] = request.get("action", "run_task")
@@ -187,10 +187,10 @@ class BackendSessionClient(QObject):
         )
 
     def request_status(
-        self,
-        *,
-        on_success: Callable[[SessionResult], None] | None = None,
-        on_error: Callable[[str], None] | None = None,
+            self,
+            *,
+            on_success: Callable[[SessionResult], None] | None = None,
+            on_error: Callable[[str], None] | None = None,
     ) -> str | None:
         return self._send_request(
             {"action": "get_status"},
@@ -223,13 +223,13 @@ class BackendSessionClient(QObject):
         return process
 
     def _send_request(
-        self,
-        payload: dict[str, Any],
-        *,
-        on_output: Callable[[str], None] | None = None,
-        on_error: Callable[[str], None] | None = None,
-        on_success: Callable[[SessionResult], None] | None = None,
-        on_finished: Callable[[SessionResult], None] | None = None,
+            self,
+            payload: dict[str, Any],
+            *,
+            on_output: Callable[[str], None] | None = None,
+            on_error: Callable[[str], None] | None = None,
+            on_success: Callable[[SessionResult], None] | None = None,
+            on_finished: Callable[[SessionResult], None] | None = None,
     ) -> str | None:
         if self._pending_requests:
             active = next(iter(self._pending_requests))
@@ -416,14 +416,14 @@ class TaskPipeline(QObject):
         self._backend.close()
 
     def load_dataset(
-        self,
-        input_file: str,
-        threads: int,
-        *,
-        on_output: Callable[[str], None] | None = None,
-        on_error: Callable[[str], None] | None = None,
-        on_success: Callable[[SessionResult], None] | None = None,
-        on_finished: Callable[[SessionResult], None] | None = None,
+            self,
+            input_file: str,
+            threads: int,
+            *,
+            on_output: Callable[[str], None] | None = None,
+            on_error: Callable[[str], None] | None = None,
+            on_success: Callable[[SessionResult], None] | None = None,
+            on_finished: Callable[[SessionResult], None] | None = None,
     ) -> int:
         generation = self._next_generation()
 
@@ -454,13 +454,13 @@ class TaskPipeline(QObject):
         return generation
 
     def run_backend_task(
-        self,
-        payload: dict[str, Any],
-        *,
-        on_output: Callable[[str], None] | None = None,
-        on_error: Callable[[str], None] | None = None,
-        on_success: Callable[[SessionResult], None] | None = None,
-        on_finished: Callable[[SessionResult], None] | None = None,
+            self,
+            payload: dict[str, Any],
+            *,
+            on_output: Callable[[str], None] | None = None,
+            on_error: Callable[[str], None] | None = None,
+            on_success: Callable[[SessionResult], None] | None = None,
+            on_finished: Callable[[SessionResult], None] | None = None,
     ) -> int:
         generation = self._next_generation()
 
@@ -490,14 +490,14 @@ class TaskPipeline(QObject):
         return generation
 
     def run_callable(
-        self,
-        fn: Callable[..., Any],
-        *args: Any,
-        on_success: Callable[[Any], None] | None = None,
-        on_error: Callable[[str], None] | None = None,
-        on_progress: Callable[[Any], None] | None = None,
-        on_finished: Callable[[], None] | None = None,
-        **kwargs: Any,
+            self,
+            fn: Callable[..., Any],
+            *args: Any,
+            on_success: Callable[[Any], None] | None = None,
+            on_error: Callable[[str], None] | None = None,
+            on_progress: Callable[[Any], None] | None = None,
+            on_finished: Callable[[], None] | None = None,
+            **kwargs: Any,
     ) -> int:
         generation = self._next_generation()
         user_progress_callback = kwargs.get("progress_callback")
