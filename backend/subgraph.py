@@ -7,8 +7,17 @@ except ModuleNotFoundError:
     from renderers import render_graph_html
 
 
-def generate_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white", render_options=None):
-    return render_graph_html(json_path, output_html_path, bgcolor, fontcolor, render_options=render_options)
+def generate_html(json_path, output_html_path, bgcolor="#222222", fontcolor="white", render_options=None,
+                  data=None, progress_callback=None):
+    return render_graph_html(
+        json_path,
+        output_html_path,
+        bgcolor,
+        fontcolor,
+        render_options=render_options,
+        data=data,
+        progress_callback=progress_callback,
+    )
 
 
 if __name__ == "__main__":

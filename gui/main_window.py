@@ -1,4 +1,5 @@
 # gui/main_window.py
+import ipaddress
 import json
 import os
 import shutil
@@ -9,6 +10,9 @@ from PyQt6.QtGui import *
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import *
+
+from backend.readPcap import save_to_csv
+from backend.subgraph import generate_html as generate_graph_html
 from qfluentwidgets import (
     Action,
     BodyLabel,
@@ -37,7 +41,19 @@ from qfluentwidgets import (
     qconfig,
     setTheme,
 )
-
+from .app_settings import (
+    APP_VERSION,
+    APP_VERSION_DISPLAY,
+    GITHUB_RELEASES_URL,
+    GITHUB_REPOSITORY_URL,
+    build_ui_font,
+    build_ui_font_families,
+    check_latest_release,
+    first_available_font_family,
+    load_app_preferences,
+    save_app_preferences,
+    ui_font_choices,
+)
 from .html_helper import get_theme_colors, generate_placeholder_html, replace_cdn_with_local
 from .tabs.anomaly_tabs import AnomalyTab
 from .tabs.custom_rule_tab import CustomRuleTab
@@ -45,9 +61,9 @@ from .tabs.flow_sort_tab import FlowSortTab
 from .tabs.path_tab import PathTab
 from .tabs.subgraph_tab import SubgraphTab
 from .task_handler import TaskHandler
-from .translator import tr, lang_mgr
+from .task_pipeline import TaskPipeline
+from .translator import tr, lang_mgr, translate_backend_output
 from .utils import resource_path, core_executable_path, TempDirManager
-from .worker import SubgraphWorker, PcapConvertWorker
 
 
 class AdaptiveTabWidget(QTabWidget):
@@ -311,11 +327,14 @@ _patch_ms_navigation_bar_metrics()
 
 
 class MainWindow(MSFluentWindow):
+    def _append_translated_log(self, message):
+        self.log_text.append(translate_backend_output(str(message)))
+
     def __init__(self):
-        qconfig.set(qconfig.fontFamilies, ["Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Segoe UI"])
         super().__init__()
         self.setObjectName("NetworkAnalyzerWindow")
-        self.setFont(QFont("Microsoft YaHei UI", 10))
+        self.app_preferences = load_app_preferences()
+        self.setFont(build_ui_font(self.app_preferences.ui_font_family, 10))
         self.workbench_interface = None
         self.web_view = None
         self._centered_on_first_show = False
@@ -335,6 +354,9 @@ class MainWindow(MSFluentWindow):
         self.current_json_path = None
         self.original_pcap_path = None
         self.converted_csv_path = None
+        self.loaded_dataset_mtime = None
+        self.loaded_dataset_threads = None
+        self.dataset_reload_required = False
 
         self.current_html_original_path = None  # 当前显示子图的原始HTML
         self.current_html_display_path = None  # 当前显示子图的显示HTML，将CDN替换为本地资源
@@ -357,10 +379,19 @@ class MainWindow(MSFluentWindow):
         self.open_command_button = None
         self.manual_command_button = None
         self.title_back_button = None
+        self.font_card = None
+        self.font_label = None
+        self.font_combo = None
+        self.font_hint_label = None
+        self.reset_font_btn = None
+        self.check_update_btn = None
 
-        self.task_handler = TaskHandler(self)  # 任务处理器
+        self.pipeline = TaskPipeline(self)
+        self.task_handler = TaskHandler(self, self.pipeline)  # 任务处理器
 
         self.init_ui()
+        self._sync_font_combo_selection(self.font().family())
+        self._update_font_hint_label(self.font().family())
         self.update_webview_theme(tr("waiting_data", "等待分析数据..."))
         QApplication.instance().paletteChanged.connect(self.on_palette_changed)
         qconfig.themeChangedFinished.connect(self._refresh_theme_visuals)
@@ -436,7 +467,7 @@ class MainWindow(MSFluentWindow):
             shutil.copy2(original_html_path, display_html_path)
             # 注入样式并替换CDN
             replace_cdn_with_local(display_html_path, bgcolor, fontcolor,
-                                   log_callback=lambda msg: self.log_text.append(msg))
+                                   log_callback=self._append_translated_log)
         except Exception as e:
             self.log_text.append(tr("prepare_html_failed", "准备HTML显示文件失败: {}").format(e))
             return original_html_path  # 失败时回退到原文件
@@ -531,16 +562,24 @@ class MainWindow(MSFluentWindow):
         self.lang_zh_tw_btn.setText(tr("lang_zh_TW", "繁体中文"))
         self.lang_en_btn.setText(tr("lang_en_US", "English"))
         self.manual_btn.setText(tr("help_manual", "用户手册"))
+        self.check_update_btn.setText(tr("check_updates", "检查更新"))
         self.about_btn.setText(tr("about", "关于"))
         self.theme_card.title_label.setText(tr("settings_theme_title", "外观主题"))
         self.theme_card.subtitle_label.setText(tr("settings_theme_desc", "手动切换浅色、深色，或跟随系统设置。"))
         self.runtime_card.title_label.setText(tr("settings_runtime_title", "运行参数"))
         self.runtime_card.subtitle_label.setText(tr("settings_runtime_desc", "调整后端分析任务使用的线程数量。"))
+        self.font_card.title_label.setText(tr("settings_font_title", "界面字体"))
+        self.font_card.subtitle_label.setText(
+            tr("settings_font_desc", "为界面选择首选显示字体。")
+        )
         self.language_card.title_label.setText(tr("language", "语言 / Language"))
         self.language_card.subtitle_label.setText(tr("settings_language_desc", "语言切换会立即更新界面文本。"))
         self.help_card.title_label.setText(tr("help", "帮助"))
         self.help_card.subtitle_label.setText(tr("settings_help_desc", "查看用户手册或软件版本信息。"))
         self.theme_label.setText(tr("settings_theme_label", "主题:"))
+        self.font_label.setText(tr("settings_font_label", "字体:"))
+        self.reset_font_btn.setText(tr("settings_font_reset", "恢复默认"))
+        self._update_font_hint_label(self.app_preferences.ui_font_family)
         with QSignalBlocker(self.theme_combo):
             self.theme_combo.setItemText(0, tr("settings_theme_auto", "跟随系统"))
             self.theme_combo.setItemText(1, tr("settings_theme_light", "浅色"))
@@ -721,7 +760,8 @@ class MainWindow(MSFluentWindow):
             (self.path_interface, self._nav_label("path_search", "路径查找", "nav_path_short", "路径")),
             (self.anomaly_interface, self._nav_label("anomaly_detection", "异常检测", "nav_anomaly_short", "异常")),
             (self.rule_interface, self._nav_label("anomaly_tab_custom_rule", "自定义规则", "nav_rule_short", "规则")),
-            (self.subgraph_interface, self._nav_label("subgraph_visualization", "子图可视化", "nav_subgraph_short", "子图")),
+            (self.subgraph_interface,
+             self._nav_label("subgraph_visualization", "子图可视化", "nav_subgraph_short", "子图")),
             (self.results_interface, self._nav_label("nav_results", "结果中心", "nav_results_short", "结果")),
             (self.settings_interface, self._nav_label("settings", "设置", "nav_settings_short", "设置")),
         ]
@@ -830,15 +870,19 @@ class MainWindow(MSFluentWindow):
 
         if self.manual_btn is not None:
             self.manual_btn.setMinimumWidth(max(110, min(154, text_width(self.manual_btn.text()) + 44)))
+        if self.check_update_btn is not None:
+            self.check_update_btn.setMinimumWidth(max(116, min(170, text_width(self.check_update_btn.text()) + 44)))
         if self.about_btn is not None:
             self.about_btn.setMinimumWidth(max(92, min(132, text_width(self.about_btn.text()) + 44)))
 
         if self.open_command_button is not None:
             self.open_command_button.setFixedWidth(max(152, min(214, text_width(self.open_command_button.text()) + 62)))
         if self.export_command_button is not None:
-            self.export_command_button.setFixedWidth(max(118, min(156, text_width(self.export_command_button.text()) + 76)))
+            self.export_command_button.setFixedWidth(
+                max(118, min(156, text_width(self.export_command_button.text()) + 76)))
         if self.manual_command_button is not None:
-            self.manual_command_button.setFixedWidth(max(140, min(198, text_width(self.manual_command_button.text()) + 62)))
+            self.manual_command_button.setFixedWidth(
+                max(140, min(198, text_width(self.manual_command_button.text()) + 62)))
 
     def _create_metric_card(self, parent_layout, icon, title_key, title_default, desc_key, desc_default):
         card = CardWidget()
@@ -923,7 +967,7 @@ class MainWindow(MSFluentWindow):
         if hasattr(self, "titleBar") and self.titleBar is not None:
             self.titleBar.setFixedHeight(48)
             if hasattr(self.titleBar, "hBoxLayout"):
-                self.titleBar.hBoxLayout.setContentsMargins(20, 0, 14, 0)
+                self.titleBar.hBoxLayout.setContentsMargins(10, 0, 0, 0)
                 self.titleBar.hBoxLayout.setSpacing(0)
             if hasattr(self.titleBar, "iconLabel"):
                 self.titleBar.iconLabel.setFixedSize(18, 18)
@@ -931,8 +975,11 @@ class MainWindow(MSFluentWindow):
                 self.titleBar.titleLabel.setStyleSheet(
                     "font-size: 13px; font-weight: 600; background: transparent;"
                 )
-                self.titleBar.titleLabel.setContentsMargins(12, 0, 12, 0)
-                self.titleBar.titleLabel.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+                self.titleBar.titleLabel.setContentsMargins(10, 0, 10, 0)
+                self.titleBar.titleLabel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                self.titleBar.titleLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+                if hasattr(self.titleBar, "hBoxLayout"):
+                    self.titleBar.hBoxLayout.setStretchFactor(self.titleBar.titleLabel, 1)
             self._ensure_titlebar_back_button()
 
         self._refresh_titlebar_layout()
@@ -944,8 +991,8 @@ class MainWindow(MSFluentWindow):
                 nav.setMinimumExpandWidth(196)
                 nav.expand(useAni=False)
             else:
-                nav.setMinimumWidth(112)
-                nav.setMaximumWidth(128)
+                nav.setMinimumWidth(104)
+                nav.setMaximumWidth(120)
             self._refresh_navigation_visuals()
 
     def _ensure_titlebar_back_button(self):
@@ -970,7 +1017,11 @@ class MainWindow(MSFluentWindow):
         title_label = self.titleBar.titleLabel
         metrics = title_label.fontMetrics()
         natural_width = metrics.horizontalAdvance(title_label.text()) + 28
-        available_width = max(220, self.width() - 340)
+        title_x = title_label.x()
+        right_limit = self.titleBar.width() - 12
+        if hasattr(self.titleBar, "minBtn") and self.titleBar.minBtn is not None:
+            right_limit = min(right_limit, self.titleBar.minBtn.x() - 10)
+        available_width = max(220, right_limit - title_x)
         title_label.setFixedWidth(min(natural_width, available_width))
 
     def _refresh_navigation_visuals(self):
@@ -993,14 +1044,14 @@ class MainWindow(MSFluentWindow):
                 continue
             is_ms_nav = not hasattr(self.navigationInterface, "setExpandWidth")
             if is_ms_nav:
-                item.setFixedSize(96, 76)
+                item.setFixedSize(92, 74)
             else:
                 item.setMinimumHeight(40)
             item.setProperty("isEnterEnabled", True)
             if hasattr(item, "setIconSize"):
                 item.setIconSize(QSize(24, 24) if is_ms_nav else QSize(18, 18))
             item.setStyleSheet(
-                "font-size: 13px; font-weight: 500; border-radius: 8px; padding: 6px 4px;"
+                "font-size: 12px; font-weight: 500; border-radius: 8px; padding: 5px 4px;"
             )
 
     def _refresh_titlebar_theme(self):
@@ -1008,15 +1059,27 @@ class MainWindow(MSFluentWindow):
             return
 
         dark = isDarkTheme()
+        mica_enabled = self.isMicaEffectEnabled()
         titlebar_bg = QColor("#1f1f1f" if dark else "#f8fbff")
+        if mica_enabled:
+            titlebar_bg.setAlpha(214 if dark else 226)
         hover_bg = QColor("#2d2d2d" if dark else "#edf5ff")
         pressed_bg = QColor("#3a3a3a" if dark else "#dfeeff")
         text_color = QColor("#ffffff" if dark else "#000000")
 
         self.titleBar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.titleBar.setStyleSheet(
-            f"background-color: {titlebar_bg.name()}; border: none;"
+            f"background-color: rgba({titlebar_bg.red()}, {titlebar_bg.green()}, {titlebar_bg.blue()}, {titlebar_bg.alpha()}); border: none;"
         )
+
+        if hasattr(self.titleBar, "titleLabel") and self.titleBar.titleLabel is not None:
+            title_font = QFont(self.titleBar.titleLabel.font())
+            title_font.setPointSize(13)
+            title_font.setWeight(QFont.Weight.DemiBold)
+            self.titleBar.titleLabel.setFont(title_font)
+            self.titleBar.titleLabel.setStyleSheet(
+                f"font-size: 13px; font-weight: 600; color: {text_color.name()}; background: transparent;"
+            )
 
         for button in (self.titleBar.minBtn, self.titleBar.maxBtn):
             button.setNormalBackgroundColor(titlebar_bg)
@@ -1025,9 +1088,15 @@ class MainWindow(MSFluentWindow):
             button.setNormalColor(text_color)
             button.setHoverColor(text_color)
             button.setPressedColor(text_color)
+            button.setStyleSheet("border: none; border-radius: 0px;")
 
         self.titleBar.closeBtn.setNormalBackgroundColor(titlebar_bg)
+        self.titleBar.closeBtn.setHoverBackgroundColor(QColor("#e81123"))
+        self.titleBar.closeBtn.setPressedBackgroundColor(QColor("#c50f1f"))
         self.titleBar.closeBtn.setNormalColor(text_color)
+        self.titleBar.closeBtn.setHoverColor(QColor("#ffffff"))
+        self.titleBar.closeBtn.setPressedColor(QColor("#ffffff"))
+        self.titleBar.closeBtn.setStyleSheet("border: none; border-top-right-radius: 8px;")
 
     def _show_fluent_dialog(self, title, content, level="info"):
         box = MessageBox(title, content, self)
@@ -1462,10 +1531,47 @@ class MainWindow(MSFluentWindow):
         max_threads = max(1, os.cpu_count() or 1)
         self.thread_spin.setRange(1, max_threads)
         self.thread_spin.setValue(min(4, max_threads))
+        self.thread_spin.valueChanged.connect(self._on_thread_count_changed)
         runtime_layout.addWidget(self.thread_spin)
         runtime_layout.addStretch()
         self.runtime_card.card_layout.addLayout(runtime_layout)
         layout.addWidget(self.runtime_card)
+
+        self.font_card = self._create_card(
+            tr("settings_font_title", "界面字体"),
+            tr("settings_font_desc", "为界面选择首选显示字体。")
+        )
+        self.font_card.setObjectName("settingsSecondaryCard")
+        font_layout = QVBoxLayout()
+        font_layout.setSpacing(8)
+        font_row = QHBoxLayout()
+        font_row.setSpacing(10)
+        font_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.font_label = BodyLabel(tr("settings_font_label", "字体:"))
+        self.font_combo = FluentComboBox()
+        self.font_combo.setMinimumWidth(320)
+        combo_height = max(34, self.font_combo.sizeHint().height())
+        self.font_combo.setFixedHeight(combo_height)
+        for family in ui_font_choices():
+            self.font_combo.addItem(family, family)
+        saved_font_family = self.app_preferences.ui_font_family.strip()
+        current_family = saved_font_family or first_available_font_family(build_ui_font_families(""))
+        current_index = max(0, self.font_combo.findData(current_family))
+        self.font_combo.setCurrentIndex(current_index)
+        self.font_combo.currentIndexChanged.connect(self._on_ui_font_changed)
+        self.reset_font_btn = PushButton(tr("settings_font_reset", "恢复默认"))
+        self.reset_font_btn.setFixedHeight(combo_height)
+        self.reset_font_btn.clicked.connect(self._reset_ui_font)
+        font_row.addWidget(self.font_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        font_row.addWidget(self.font_combo, 1, Qt.AlignmentFlag.AlignVCenter)
+        font_row.addWidget(self.reset_font_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.font_hint_label = CaptionLabel()
+        self.font_hint_label.setWordWrap(True)
+        self._update_font_hint_label(saved_font_family)
+        font_layout.addLayout(font_row)
+        font_layout.addWidget(self.font_hint_label)
+        self.font_card.card_layout.addLayout(font_layout)
+        layout.addWidget(self.font_card)
 
         self.language_card = self._create_card(
             tr("language", "语言 / Language"),
@@ -1496,17 +1602,182 @@ class MainWindow(MSFluentWindow):
         self.help_card.setObjectName("settingsSecondaryCard")
         help_layout = QHBoxLayout()
         self.manual_btn = PushButton(FIF.HELP, tr("help_manual", "用户手册"))
+        self.check_update_btn = PushButton(FIF.SYNC, tr("check_updates", "检查更新"))
         self.about_btn = PushButton(FIF.INFO, tr("about", "关于"))
         self.manual_btn.setFixedHeight(30)
+        self.check_update_btn.setFixedHeight(30)
         self.about_btn.setFixedHeight(30)
         self.manual_btn.clicked.connect(self.show_manual)
+        self.check_update_btn.clicked.connect(self.check_for_updates)
         self.about_btn.clicked.connect(self.about)
         help_layout.addWidget(self.manual_btn)
+        help_layout.addWidget(self.check_update_btn)
         help_layout.addWidget(self.about_btn)
         help_layout.addStretch()
         self.help_card.card_layout.addLayout(help_layout)
         layout.addWidget(self.help_card)
         layout.addStretch()
+
+    def _find_font_combo_index(self, family: str | None) -> int:
+        if self.font_combo is None:
+            return -1
+
+        target = str(family or "").strip()
+        if not target:
+            return -1
+
+        exact_index = self.font_combo.findData(target)
+        if exact_index >= 0:
+            return exact_index
+
+        normalized_target = target.casefold()
+        for index in range(self.font_combo.count()):
+            item_family = str(self.font_combo.itemData(index) or self.font_combo.itemText(index)).strip()
+            if item_family.casefold() == normalized_target:
+                return index
+        return -1
+
+    def _sync_font_combo_selection(self, family: str | None) -> None:
+        if self.font_combo is None:
+            return
+
+        index = self._find_font_combo_index(family)
+        if index < 0:
+            return
+
+        with QSignalBlocker(self.font_combo):
+            self.font_combo.setCurrentIndex(index)
+
+    def _apply_font_to_safe_widgets(self, font: QFont) -> None:
+        self.setFont(font)
+        if hasattr(self, "titleBar") and self.titleBar is not None:
+            self.titleBar.setFont(font)
+
+        for child in self.findChildren(QWidget):
+            if isinstance(child, QWebEngineView):
+                continue
+
+            parent = child.parentWidget()
+            skip_due_to_webview = False
+            while parent is not None:
+                if isinstance(parent, QWebEngineView):
+                    skip_due_to_webview = True
+                    break
+                parent = parent.parentWidget()
+
+            if skip_due_to_webview:
+                continue
+
+            child.setFont(font)
+
+    def _apply_ui_font(self, family: str | None, *, save: bool) -> None:
+        selected_family = str(family or "").strip()
+        app_font = build_ui_font(selected_family, 10)
+        qconfig.set(qconfig.fontFamilies, build_ui_font_families(selected_family))
+        self._apply_font_to_safe_widgets(app_font)
+        applied_family = app_font.family().strip()
+        self.app_preferences.ui_font_family = applied_family or selected_family
+        if save:
+            save_app_preferences(self.app_preferences)
+        self._sync_font_combo_selection(applied_family or selected_family)
+        self._update_font_hint_label(applied_family or selected_family)
+        self._refresh_compact_control_widths()
+        self._refresh_titlebar_layout()
+        self._refresh_dashboard_headline_metrics()
+        self.update()
+        self.repaint()
+        self.retranslate_ui()
+
+    def _on_ui_font_changed(self, _index: int) -> None:
+        if self.font_combo is None:
+            return
+        selected_family = str(self.font_combo.currentData() or self.font_combo.currentText()).strip()
+        self._apply_ui_font(selected_family, save=True)
+
+    def _reset_ui_font(self) -> None:
+        default_family = first_available_font_family(build_ui_font_families(""))
+        self._sync_font_combo_selection(default_family)
+        self._apply_ui_font("", save=True)
+
+    def _update_font_hint_label(self, family: str | None) -> None:
+        if self.font_hint_label is None:
+            return
+
+        selected_family = str(family or "").strip()
+        fallback_chain = " / ".join(build_ui_font_families(""))
+        if not selected_family:
+            self.font_hint_label.setText(
+                tr("settings_font_hint_default", "当前使用默认字体链：{}").format(fallback_chain)
+            )
+            return
+
+        self.font_hint_label.setText(
+            tr("settings_font_hint_selected", "当前优先字体：{}").format(selected_family)
+        )
+
+    def check_for_updates(self) -> None:
+        if self.check_update_btn is not None:
+            self.check_update_btn.setEnabled(False)
+            self.check_update_btn.setText(tr("checking_updates", "正在检查..."))
+
+        self.pipeline.run_callable(
+            check_latest_release,
+            on_success=self._handle_update_check_result,
+            on_error=self._handle_update_check_error,
+            on_finished=self._restore_update_button,
+        )
+
+    def _restore_update_button(self) -> None:
+        if self.check_update_btn is None:
+            return
+        self.check_update_btn.setEnabled(True)
+        self.check_update_btn.setText(tr("check_updates", "检查更新"))
+
+    def _handle_update_check_error(self, message: str) -> None:
+        self._show_error_dialog(
+            tr("update_check_failed_title", "检查更新失败"),
+            tr("update_check_failed_body", "无法获取 GitHub 最新 Release 信息。\n\n{}").format(message),
+        )
+
+    def _handle_update_check_result(self, result: dict) -> None:
+        status = str((result or {}).get("status") or "")
+        if status == "no_release":
+            self._show_fluent_dialog(
+                tr("update_no_release_title", "暂未发布 Release"),
+                tr("update_no_release_body", "当前版本：{}\nGitHub 仓库暂未发布正式 Release。").format(APP_VERSION),
+            )
+            return
+
+        current_version = str(result.get("current_version") or APP_VERSION)
+        latest_version = str(result.get("latest_version") or current_version)
+        release_name = str(result.get("release_name") or latest_version)
+        published_at = str(result.get("published_at") or tr("not_available", "暂无"))
+        html_url = str(result.get("html_url") or GITHUB_RELEASES_URL)
+        lines = [
+            tr("update_current_version", "当前版本：{}").format(current_version),
+            tr("update_latest_version", "最新版本：{}").format(latest_version),
+            tr("update_release_name", "Release 名称：{}").format(release_name),
+            tr("update_published_at", "发布时间：{}").format(published_at),
+        ]
+
+        if status == "update_available":
+            box = MessageBox(
+                tr("update_available_title", "发现新版本"),
+                "\n".join(lines),
+                self,
+            )
+            box.yesButton.setText(tr("open_release_page", "打开 Release 页面"))
+            box.cancelButton.setText(tr("close", "关闭"))
+            box.setMinimumWidth(500)
+            if box.exec():
+                QDesktopServices.openUrl(QUrl(html_url))
+            return
+
+        self._show_fluent_dialog(
+            tr("update_latest_title", "当前已是最新版本"),
+            "\n".join(lines),
+            level="success",
+        )
 
     def _on_theme_changed(self):
         theme = ["auto", "light", "dark"][max(0, min(self.theme_combo.currentIndex(), 2))]
@@ -1608,6 +1879,7 @@ class MainWindow(MSFluentWindow):
         if ext in ['.json', '.html']:
             # 进入仅查看模式，禁用分析按钮
             self.set_view_only_mode(True)
+            self.pipeline.restart_backend_session()
 
             # 清除数据文件相关状态
             self.data_file = None
@@ -1621,6 +1893,9 @@ class MainWindow(MSFluentWindow):
             self.is_data_available = False
             self.original_pcap_path = None
             self.converted_csv_path = None
+            self.loaded_dataset_mtime = None
+            self.loaded_dataset_threads = None
+            self.dataset_reload_required = False
 
             # 新增：清除之前分析模式产生的全网拓扑文件记录
             self.full_graph_json_path = None
@@ -1671,6 +1946,10 @@ class MainWindow(MSFluentWindow):
         self.result_detail.clear()
         self.has_graph = False
         self.is_data_available = False
+        self.current_json_path = None
+        self.current_html_original_path = None
+        self.current_html_display_path = None
+        self.update_export_actions()
         self.update_webview_theme(tr("analyzing_data", "正在分析数据，请稍候..."))
         self.log_text.append(tr("loaded_file", "已加载文件: {}").format(file_path))
         self._set_dashboard_status("dashboard_loaded", "数据已就绪")
@@ -1678,12 +1957,59 @@ class MainWindow(MSFluentWindow):
         if ext == '.pcap':
             self.convert_pcap(file_path)
         else:  # .csv
+            self._load_dataset_and_render(file_path)
+
+    def _load_dataset_and_render(self, file_path):
+        self.switchTo(self.results_interface)
+        self.show_output_route("log")
+        self.log_text.append(tr("dataset_loading", "正在加载图模型，请稍候..."))
+        self._set_dashboard_status("dashboard_loading", "正在构建图模型")
+
+        def on_load_success(result):
+            metadata = result.metadata or {}
+            self.loaded_dataset_mtime = os.path.getmtime(file_path) if os.path.exists(file_path) else None
+            self.loaded_dataset_threads = self.thread_spin.value()
+            self.dataset_reload_required = False
+            self.is_data_available = int(metadata.get("vertex_count", 0) or 0) > 0
+            self._set_dashboard_status("dashboard_loaded", "图模型已就绪")
             self.show_full_graph()
+
+        def on_load_error(message):
+            self.is_data_available = False
+            self.loaded_dataset_mtime = None
+            self.loaded_dataset_threads = None
+            self.dataset_reload_required = False
+            self._set_dashboard_status("dashboard_invalid", "数据不可用")
+            self._show_error_dialog(tr("error", "错误"), message)
+
+        self.pipeline.load_dataset(
+            file_path,
+            self.thread_spin.value(),
+            on_output=self._append_translated_log,
+            on_error=on_load_error,
+            on_success=on_load_success,
+        )
+
+    def _on_thread_count_changed(self, value):
+        if self.view_only_mode or not self.data_file:
+            return
+        if self.loaded_dataset_threads is None or self.loaded_dataset_threads == value:
+            return
+        self.dataset_reload_required = True
+        self.is_data_available = False
+        self.pipeline.restart_backend_session()
+        self.log_text.append(
+            tr("thread_count_reload", "线程数已变更为 {}，旧图模型缓存已失效，请重新执行分析或重新加载数据。").format(
+                value)
+        )
 
     def convert_pcap(self, pcap_path):
         self.update_webview_theme(tr("parsing_pcap", "正在解析 PCAP 文件，请稍候..."))
         csv_path = self.temp_manager.get_path("converted.csv")
-        self.pcap_worker = PcapConvertWorker(pcap_path, csv_path)
+        self.switchTo(self.results_interface)
+        self.show_output_route("log")
+        self.log_text.append(tr("parsing_pcap", "正在解析 PCAP 文件，请稍候..."))
+        self._set_dashboard_status("dashboard_loading", "正在解析 PCAP")
 
         def on_pcap_converted(csv_path):
             # 设置 PCAP 原始路径和转换后的 CSV 路径
@@ -1692,18 +2018,21 @@ class MainWindow(MSFluentWindow):
             # 加载转换后的 CSV
             self.load_file(csv_path)
 
-        self.pcap_worker.success.connect(on_pcap_converted)
-        self.pcap_worker.error.connect(
-            lambda e: [
+        self.pipeline.run_callable(
+            save_to_csv,
+            pcap_path,
+            csv_path,
+            on_success=lambda _result: on_pcap_converted(csv_path),
+            on_error=lambda e: [
                 self._show_error_dialog(
                     tr("error", "错误"),
                     e
                 ),
                 setattr(self, 'is_data_available', False),
                 self._set_dashboard_status("dashboard_invalid", "数据不可用")
-            ]
+            ],
+            on_progress=self._append_translated_log,
         )
-        self.pcap_worker.start()
 
     def export_pcap_csv(self):
         if not self.original_pcap_path or not self.converted_csv_path or not os.path.exists(self.converted_csv_path):
@@ -1780,27 +2109,14 @@ class MainWindow(MSFluentWindow):
         html_path = self.temp_manager.get_path("full_graph.html")
         self.full_graph_json_path = json_path
         self.full_graph_html_path = html_path
-        cmd = [
-            core_executable_path(),
-            "--input", self.data_file,
-            "--task", "full-graph",
-            "--output-json", json_path,
-            "--threads", str(self.thread_spin.value())
-        ]
-
-        def on_success_wrapper():
-            self.generate_html(json_path, html_path)
-            try:
-                if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
-                    with open(json_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    nodes = data.get('nodes', [])
-                    self.is_data_available = len(nodes) > 0
-            except Exception as e:
-                self.is_data_available = False
-                self.log_text.append(tr("data_validity_check_failed", "检查数据有效性失败: {}").format(e))
-
-        self.task_handler.run_worker(cmd, task_type="full-graph", on_success=on_success_wrapper)
+        cmd = self._core_command("full-graph")
+        self.task_handler.execute_command(
+            cmd,
+            task_type="full-graph",
+            generate_graph=True,
+            graph_name="full_graph",
+            clear_log=False,
+        )
 
     # ---------- HTML生成与显示 ----------
     def _render_options(self):
@@ -1823,6 +2139,16 @@ class MainWindow(MSFluentWindow):
             if len(nodes) == 0:
                 self.log_text.append(tr("generate_html_no_nodes", "图中无任何节点，可能是数据文件中未包含有效 IP 地址。"))
                 self.update_webview_theme(tr("generate_html_theme_no_data", "图中无数据"))
+                if getattr(self, "_suppress_next_empty_graph_notice", False):
+                    self._suppress_next_empty_graph_notice = False
+                else:
+                    self._show_warning_dialog(
+                        tr("empty_graph_title", "未找到可视化节点"),
+                        tr(
+                            "empty_graph_content",
+                            "当前任务没有生成可视化节点。请检查数据文件是否包含有效 IP，或调整目标 IP、检测阈值后重试。"
+                        )
+                    )
                 return
         except Exception as e:
             self.log_text.append(tr("generate_html_read_failed", "读取 JSON 文件失败: {}").format(e))
@@ -1832,43 +2158,46 @@ class MainWindow(MSFluentWindow):
         bgcolor, fontcolor = get_theme_colors()
         self.log_text.append(tr("generate_html_rendering", "正在渲染图表，请稍候..."))
 
-        self.subgraph_worker = SubgraphWorker(
-            json_path,
-            html_path,
-            bgcolor,
-            fontcolor,
-            render_options=self._render_options(),
-        )
-
-        def on_render_success(generated_html_path):
+        def on_render_success(render_info):
             try:
-                # generated_html_path 是原始HTML（CDN版本）
+                if render_info:
+                    self._handle_render_info(
+                        "render_mode:{renderer}:{mode}:{nodes}:{edges}".format(**render_info)
+                    )
                 # 生成显示用的HTML文件（替换CDN为本地资源）
-                base, ext = os.path.splitext(generated_html_path)
+                base, ext = os.path.splitext(html_path)
                 display_html_path = base + "_display" + ext
                 # 复制原始文件到显示文件，然后替换
-                shutil.copy2(generated_html_path, display_html_path)
+                shutil.copy2(html_path, display_html_path)
                 replace_cdn_with_local(display_html_path, bgcolor, fontcolor,
-                                       log_callback=lambda msg: self.log_text.append(msg))
+                                       log_callback=self._append_translated_log)
                 # 加载显示文件
                 self.display_html(display_html_path)
                 self.log_text.append(tr("generate_html_success", "图表渲染完成！"))
                 # 记录路径
                 self.current_json_path = json_path
-                self.current_html_original_path = generated_html_path
+                self.current_html_original_path = html_path
                 self.current_html_display_path = display_html_path
                 self.update_export_actions()
             except Exception as e:
                 self.log_text.append(tr("generate_html_load_failed", "加载 HTML 失败: {}").format(e))
 
-        self.subgraph_worker.success.connect(on_render_success)
-        self.subgraph_worker.info.connect(self._handle_render_info)
-        self.subgraph_worker.error.connect(lambda e: self.log_text.append(e))
-        self.subgraph_worker.start()
+        self.pipeline.run_callable(
+            generate_graph_html,
+            json_path,
+            html_path,
+            bgcolor,
+            fontcolor,
+            render_options=self._render_options(),
+            data=data,
+            on_success=on_render_success,
+            on_error=lambda e: self._append_translated_log(f"生成子图失败: {e}"),
+            on_progress=self._append_translated_log,
+        )
 
     def _handle_render_info(self, message):
         if not message.startswith("render_mode:"):
-            self.log_text.append(message)
+            self._append_translated_log(message)
             return
         _, renderer, mode, nodes, edges = message.split(":", 4)
         mode_label = {
@@ -1913,18 +2242,39 @@ class MainWindow(MSFluentWindow):
         bg_color, text_color = get_theme_colors()
         dark = isDarkTheme()
         mica_enabled = self.isMicaEffectEnabled()
+
+        def alpha_color(color: str, alpha: int) -> str:
+            q = QColor(color)
+            return f"rgba({q.red()}, {q.green()}, {q.blue()}, {alpha})"
+
         window_bg = "transparent" if mica_enabled else bg_color
-        page_bg = "#1f1f1f" if dark else "#f4f8fc"
+        page_bg = "transparent" if mica_enabled else ("#1f1f1f" if dark else "#f4f8fc")
         scroll_bg = "transparent" if mica_enabled else bg_color
-        surface_color = "#2a2d31" if dark else "#ffffff"
-        card_color = "#32353a" if dark else "#f7f9fc"
+        surface_color = alpha_color("#2a2d31" if dark else "#ffffff", 228) if mica_enabled else (
+            "#2a2d31" if dark else "#ffffff"
+        )
+        card_color = alpha_color("#32353a" if dark else "#f7f9fc", 216) if mica_enabled else (
+            "#32353a" if dark else "#f7f9fc"
+        )
         border_color = "#464b53" if dark else "#d7dde7"
-        nav_bg = "#1d2026" if dark else "#f8fbff"
-        nav_hover = "#2b3038" if dark else "#edf5ff"
-        nav_pressed = "#343a44" if dark else "#dfeeff"
-        nav_selected = "#263241" if dark else "#e4f1ff"
-        hero_bg = "#262a30" if dark else "#f8fbff"
-        panel_bg = "#2d3138" if dark else "#ffffff"
+        nav_bg = alpha_color("#1d2026" if dark else "#f8fbff", 120) if mica_enabled else (
+            "#1d2026" if dark else "#f8fbff"
+        )
+        nav_hover = alpha_color("#2b3038" if dark else "#edf5ff", 196) if mica_enabled else (
+            "#2b3038" if dark else "#edf5ff"
+        )
+        nav_pressed = alpha_color("#343a44" if dark else "#dfeeff", 212) if mica_enabled else (
+            "#343a44" if dark else "#dfeeff"
+        )
+        nav_selected = alpha_color("#263241" if dark else "#e4f1ff", 224) if mica_enabled else (
+            "#263241" if dark else "#e4f1ff"
+        )
+        hero_bg = alpha_color("#262a30" if dark else "#f8fbff", 202) if mica_enabled else (
+            "#262a30" if dark else "#f8fbff"
+        )
+        panel_bg = alpha_color("#2d3138" if dark else "#ffffff", 210) if mica_enabled else (
+            "#2d3138" if dark else "#ffffff"
+        )
         subtle_text = "#c4c9d4" if dark else "#617082"
         header_bg = "#39404a" if dark else "#eef3fb"
         alt_bg = "#2f3339" if dark else "#f8fbff"
@@ -1944,6 +2294,9 @@ class MainWindow(MSFluentWindow):
                 background-color: {scroll_bg};
                 border: none;
             }}
+            QWidget {{
+                background: transparent;
+            }}
             QWidget#customRuleContent {{
                 background-color: {page_bg};
                 color: {text_color};
@@ -1951,6 +2304,9 @@ class MainWindow(MSFluentWindow):
             QStackedWidget {{
                 background-color: transparent;
                 border: none;
+            }}
+            QStackedWidget > QWidget {{
+                background-color: transparent;
             }}
             QWidget#dashboard_content,
             QWidget#topology_content,
@@ -2152,7 +2508,7 @@ class MainWindow(MSFluentWindow):
 
         # 运行日志
         self.log_text.setStyleSheet(f"""
-            QTextEdit {{    
+            QTextEdit {{
                 background-color: {surface_color}; color: {text_color}; border: 1px solid {border_color};
                 border-radius: 8px; padding: 6px;
                 font-family: Consolas, monospace; font-size: 12px;
@@ -2239,6 +2595,73 @@ class MainWindow(MSFluentWindow):
         multiplier = multipliers[unit_index] if 0 <= unit_index < len(multipliers) else 1
         return int(value_text) * multiplier
 
+    def _show_invalid_input(self, content):
+        self._show_warning_dialog(tr("invalid_input_title", "输入格式有误"), content)
+
+    def _is_valid_ipv4(self, value, label):
+        try:
+            ipaddress.IPv4Address(value)
+            return True
+        except ValueError:
+            self._show_invalid_input(
+                tr("invalid_ipv4_format", "{} 格式不正确：{}。请输入完整 IPv4 地址，例如 192.168.1.100。").format(
+                    label, value or tr("empty_value", "空值")
+                )
+            )
+            return False
+
+    def _is_valid_cidr(self, value):
+        try:
+            ipaddress.IPv4Network(value, strict=False)
+            return True
+        except ValueError:
+            self._show_invalid_input(
+                tr("invalid_cidr_format", "CIDR 范围格式不正确：{}。请输入类似 192.168.1.0/24 的 IPv4 网段。").format(
+                    value or tr("empty_value", "空值")
+                )
+            )
+            return False
+
+    def _validate_ip_range(self, start, end):
+        if not self._is_valid_ipv4(start, tr("custom_rule_start_ip_name", "起始IP")):
+            return False
+        if not self._is_valid_ipv4(end, tr("custom_rule_end_ip_name", "结束IP")):
+            return False
+        if int(ipaddress.IPv4Address(start)) > int(ipaddress.IPv4Address(end)):
+            self._show_invalid_input(
+                tr("invalid_ip_range_order", "起始 IP 不能大于结束 IP，请检查 IP 范围。")
+            )
+            return False
+        return True
+
+    def _parse_int_input(self, value_text, label, minimum=None, maximum=None):
+        try:
+            value = int(value_text)
+        except ValueError:
+            self._show_invalid_input(
+                tr("invalid_integer_format", "{} 必须为整数。").format(label)
+            )
+            return None
+        if minimum is not None and value < minimum:
+            self._show_invalid_input(
+                tr("invalid_integer_min", "{} 不能小于 {}。").format(label, minimum)
+            )
+            return None
+        if maximum is not None and value > maximum:
+            self._show_invalid_input(
+                tr("invalid_integer_range", "{} 必须在 {} 到 {} 之间。").format(label, minimum, maximum)
+            )
+            return None
+        return value
+
+    def _parse_scaled_bytes_input(self, value_text, unit_index, label):
+        value = self._parse_int_input(value_text, label, minimum=0)
+        if value is None:
+            return None
+        multipliers = [1, 1024, 1024 ** 2, 1024 ** 3]
+        multiplier = multipliers[unit_index] if 0 <= unit_index < len(multipliers) else 1
+        return value * multiplier
+
     def _execute_task(self, task_type, *args, generate_graph=False, graph_name=None):
         base_cmd = self._core_command(task_type, *args)
         self.switchTo(self.results_interface)
@@ -2274,6 +2697,10 @@ class MainWindow(MSFluentWindow):
                 tr("path_search_need_src_dst", "请输入源IP和目的IP")
             )
             return
+        if not self._is_valid_ipv4(src, tr("src_ip_name", "源IP")):
+            return
+        if not self._is_valid_ipv4(dst, tr("dst_ip_name", "目的IP")):
+            return
         if self.path_tab.compare_checkbox.isChecked():
             base_cmd = self._core_command("compare-paths", "--src", src, "--dst", dst)
             self.switchTo(self.results_interface)
@@ -2297,15 +2724,14 @@ class MainWindow(MSFluentWindow):
         ]
         min_traffic_str = tab.min_traffic_edit.text().strip()
         if min_traffic_str:
-            try:
-                min_traffic = self._scaled_bytes(min_traffic_str, tab.min_traffic_unit.currentIndex())
-                args += ["--min-traffic", str(min_traffic)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("port_scan_warning_title", "警告"),
-                    tr("port_scan_min_traffic_int", "最小总流量必须为整数")
-                )
+            min_traffic = self._parse_scaled_bytes_input(
+                min_traffic_str,
+                tab.min_traffic_unit.currentIndex(),
+                tr("port_scan_min_traffic_name", "最小总流量")
+            )
+            if min_traffic is None:
                 return
+            args += ["--min-traffic", str(min_traffic)]
         self._execute_task("port-scan", *args, generate_graph=True, graph_name="port_scan")
 
     def run_ddos_detection(self):
@@ -2319,15 +2745,14 @@ class MainWindow(MSFluentWindow):
         )
         traffic_str = self.anomaly_tab.ddos_tab.traffic_edit.text().strip()
         if traffic_str:
-            try:
-                val = self._scaled_bytes(traffic_str, self.anomaly_tab.ddos_tab.traffic_unit.currentIndex())
-                base_cmd += ["--in-data-threshold", str(val)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("ddos_warning_title", "警告"),
-                    tr("ddos_traffic_must_be_int", "入流量阈值必须为整数")
-                )
+            val = self._parse_scaled_bytes_input(
+                traffic_str,
+                self.anomaly_tab.ddos_tab.traffic_unit.currentIndex(),
+                tr("ddos_traffic_name", "入流量阈值")
+            )
+            if val is None:
                 return
+            base_cmd += ["--in-data-threshold", str(val)]
         self.task_handler.execute_command(base_cmd, task_type="ddos-target", generate_graph=True, graph_name="ddos")
 
     def run_star_detection(self):
@@ -2346,6 +2771,8 @@ class MainWindow(MSFluentWindow):
                 tr("subgraph_need_target_ip", "请输入目标IP")
             )
             return
+        if not self._is_valid_ipv4(ip, tr("target_ip_name", "目标IP")):
+            return
         self.log_text.append(tr("subgraph_generating", "正在生成以 {} 为中心的子图...").format(ip))
         self._execute_task("subgraph", "--target", ip, generate_graph=True, graph_name="subgraph")
 
@@ -2360,27 +2787,23 @@ class MainWindow(MSFluentWindow):
                 tr("custom_rule_need_target_ip", "请输入目标IP")
             )
             return
+        if not self._is_valid_ipv4(rule_target, tr("target_ip_name", "目标IP")):
+            return
 
         base_cmd = self._core_command("custom-rule", "--rule-target", rule_target)
 
         # 协议类型
         protocol_str = tab.protocol_edit.text().strip()
         if protocol_str:
-            try:
-                protocol_val = int(protocol_str)
-                if protocol_val < 0 or protocol_val > 255:
-                    self._show_warning_dialog(
-                        tr("custom_rule_warning_title", "警告"),
-                        tr("custom_rule_protocol_range", "协议类型必须是0-255之间的整数")
-                    )
-                    return
-                base_cmd += ["--rule-protocol", str(protocol_val)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_protocol_int", "协议类型必须为整数")
-                )
+            protocol_val = self._parse_int_input(
+                protocol_str,
+                tr("custom_rule_protocol_name", "协议类型"),
+                minimum=0,
+                maximum=255
+            )
+            if protocol_val is None:
                 return
+            base_cmd += ["--rule-protocol", str(protocol_val)]
 
         # 规则类型
         eng_rule_type = self._combo_value(tab.rule_type_combo, ["deny", "allow"], "deny")
@@ -2395,6 +2818,8 @@ class MainWindow(MSFluentWindow):
                     tr("custom_rule_need_cidr", "请输入CIDR范围")
                 )
                 return
+            if not self._is_valid_cidr(cidr):
+                return
             base_cmd += ["--range-cidr", cidr]
         else:
             start = tab.start_ip_edit.text().strip()
@@ -2405,46 +2830,39 @@ class MainWindow(MSFluentWindow):
                     tr("custom_rule_need_start_end", "请输入起始IP和结束IP")
                 )
                 return
+            if not self._validate_ip_range(start, end):
+                return
             base_cmd += ["--range-start", start, "--range-end", end]
 
         # 源端口
         src_port = tab.src_port_edit.text().strip()
         if src_port:
-            try:
-                int(src_port)
-                base_cmd += ["--rule-src-port", src_port]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_src_port_int", "源端口必须为整数")
-                )
+            parsed_port = self._parse_int_input(src_port, tr("custom_rule_src_port_name", "源端口"), minimum=0,
+                                                maximum=65535)
+            if parsed_port is None:
                 return
+            base_cmd += ["--rule-src-port", str(parsed_port)]
 
         # 目的端口
         dst_port = tab.dst_port_edit.text().strip()
         if dst_port:
-            try:
-                int(dst_port)
-                base_cmd += ["--rule-dst-port", dst_port]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_dst_port_int", "目的端口必须为整数")
-                )
+            parsed_port = self._parse_int_input(dst_port, tr("custom_rule_dst_port_name", "目的端口"), minimum=0,
+                                                maximum=65535)
+            if parsed_port is None:
                 return
+            base_cmd += ["--rule-dst-port", str(parsed_port)]
 
         # 最大流量阈值
         max_traffic_str = tab.max_traffic_edit.text().strip()
         if max_traffic_str:
-            try:
-                val = self._scaled_bytes(max_traffic_str, tab.max_traffic_unit.currentIndex())
-                base_cmd += ["--rule-max-traffic", str(val)]
-            except ValueError:
-                self._show_warning_dialog(
-                    tr("custom_rule_warning_title", "警告"),
-                    tr("custom_rule_max_traffic_int", "最大流量阈值必须为整数")
-                )
+            val = self._parse_scaled_bytes_input(
+                max_traffic_str,
+                tab.max_traffic_unit.currentIndex(),
+                tr("custom_rule_max_traffic_name", "最大流量阈值")
+            )
+            if val is None:
                 return
+            base_cmd += ["--rule-max-traffic", str(val)]
 
         self.task_handler.execute_command(base_cmd, task_type="custom-rule", generate_graph=True,
                                           graph_name="custom_rule")
@@ -2473,6 +2891,24 @@ class MainWindow(MSFluentWindow):
             self.is_data_available = False
             return False
 
+        try:
+            current_mtime = os.path.getmtime(self.data_file)
+        except OSError:
+            current_mtime = None
+        if self.loaded_dataset_mtime is not None and current_mtime is not None and current_mtime != self.loaded_dataset_mtime:
+            self.log_text.append(tr("dataset_file_changed", "检测到数据文件发生变化，正在重新加载图模型..."))
+            self.load_file(self.data_file)
+            return False
+
+        if self.dataset_reload_required or (
+                self.loaded_dataset_threads is not None and self.loaded_dataset_threads != self.thread_spin.value()
+        ):
+            self.log_text.append(
+                tr("dataset_thread_changed", "检测到线程数发生变化，正在按新的线程配置重新加载图模型...")
+            )
+            self._load_dataset_and_render(self.data_file)
+            return False
+
         if not self.is_data_available:
             self._show_warning_dialog(
                 tr("invalid_data", "数据无效"),
@@ -2481,6 +2917,10 @@ class MainWindow(MSFluentWindow):
             return False
 
         return True
+
+    def closeEvent(self, event):
+        self.pipeline.close_backend_session()
+        super().closeEvent(event)
 
     def about(self):
         dark = isDarkTheme()
@@ -2494,6 +2934,7 @@ class MainWindow(MSFluentWindow):
         dialog.setWindowTitle(tr("about", "关于"))
         dialog.resize(720, 430)
         dialog.setWindowIcon(QIcon(resource_path("resources/icon.ico")))
+        dialog.setFont(self.font())
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(24, 18, 24, 18)
@@ -2547,42 +2988,50 @@ class MainWindow(MSFluentWindow):
 
         name_label = QLabel(tr("app_title", "网络流量分析与异常检测系统"))
         name_label.setObjectName("aboutName")
-        build_label = QLabel(tr("about_version", "版本 2.1 | 2026年4月"))
+        name_label.setFont(self.font())
+        build_label = QLabel(tr("about_version", "版本 {} | 2026年4月").format(APP_VERSION_DISPLAY))
         build_label.setObjectName("aboutBuild")
+        build_label.setFont(self.font())
         build_label.setWordWrap(True)
 
         subtitle_label = QLabel(tr("about_subtitle", "华中科技大学网络空间安全学院 · 程序设计综合课程设计"))
         subtitle_label.setObjectName("aboutParagraph")
+        subtitle_label.setFont(self.font())
         subtitle_label.setWordWrap(True)
 
         intro_label = QLabel(tr("about_intro", "一个面向课程设计与工程化演示的网络流量分析桌面应用。"))
         intro_label.setObjectName("aboutMuted")
+        intro_label.setFont(self.font())
         intro_label.setWordWrap(True)
 
         stack_label = QLabel(
             f"{tr('about_stack_label', '技术栈')}: {tr('about_stack_value', 'C++ · PyQt6 · PyQt-Fluent-Widgets')}"
         )
         stack_label.setObjectName("aboutParagraph")
+        stack_label.setFont(self.font())
         stack_label.setWordWrap(True)
 
         focus_label = QLabel(
             f"{tr('about_focus_label', '定位')}: {tr('about_focus_value', '网络流量分析、异常检测与拓扑可视化')}"
         )
         focus_label.setObjectName("aboutParagraph")
+        focus_label.setFont(self.font())
         focus_label.setWordWrap(True)
 
         github_label = QLabel(
-            f"GitHub: <a href=\"https://github.com/Na-Bian/Network-Traffic-Analysis-Anomaly-Detection-System\" "
+            f"GitHub: <a href=\"{GITHUB_REPOSITORY_URL}\" "
             f"style=\"color:{accent}; text-decoration:none;\">"
             "Na-Bian/Network-Traffic-Analysis-Anomaly-Detection-System</a>"
         )
         github_label.setObjectName("aboutLink")
+        github_label.setFont(self.font())
         github_label.setTextFormat(Qt.TextFormat.RichText)
         github_label.setOpenExternalLinks(True)
         github_label.setWordWrap(True)
 
         copyright_label = QLabel(tr("about_copyright_value", "©2026 那，边。版权所有。"))
         copyright_label.setObjectName("aboutMuted")
+        copyright_label.setFont(self.font())
         copyright_label.setWordWrap(True)
 
         text_col.addWidget(name_label)
@@ -2606,18 +3055,19 @@ class MainWindow(MSFluentWindow):
         footer = QHBoxLayout()
         footer.addStretch()
         copy_close_btn = PushButton(tr("about_copy_and_close", "复制并关闭"))
+        copy_close_btn.setFont(self.font())
         copy_close_btn.setFixedWidth(132)
         copy_close_btn.clicked.connect(
             lambda: (
                 QApplication.clipboard().setText(
                     "\n".join([
                         tr("app_title", "网络流量分析与异常检测系统"),
-                        tr("about_version", "版本 2.1 | 2026年4月"),
+                        tr("about_version", "版本 {} | 2026年4月").format(APP_VERSION_DISPLAY),
                         tr("about_subtitle", "华中科技大学网络空间安全学院 · 程序设计综合课程设计"),
                         tr("about_intro", "一个面向课程设计与工程化演示的网络流量分析桌面应用。"),
                         f"{tr('about_stack_label', '技术栈')}: {tr('about_stack_value', 'C++ · PyQt6 · PyQt-Fluent-Widgets')}",
                         f"{tr('about_focus_label', '定位')}: {tr('about_focus_value', '网络流量分析、异常检测与拓扑可视化')}",
-                        "GitHub: https://github.com/Na-Bian/Network-Traffic-Analysis-Anomaly-Detection-System",
+                        f"GitHub: {GITHUB_REPOSITORY_URL}",
                         tr("about_copyright_value", "©2026 那，边。版权所有。"),
                     ])
                 ),
@@ -2626,6 +3076,7 @@ class MainWindow(MSFluentWindow):
         )
         footer.addWidget(copy_close_btn)
         close_btn = PushButton(tr("close", "关闭"))
+        close_btn.setFont(self.font())
         close_btn.setFixedWidth(104)
         close_btn.clicked.connect(dialog.accept)
         footer.addWidget(close_btn)

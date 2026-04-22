@@ -226,7 +226,7 @@
     <div class="container">
         <h1>网络流量分析与异常检测系统</h1>
         <p class="subtitle">华中科技大学网络空间安全学院 - 程序设计综合课程设计</p>
-        <div class="version">版本 2.1 | 2026年4月</div>
+        <div class="version">版本 2.2 | 2026年4月</div>
 
         <h2>📖 1. 系统简介</h2>
         <p>本系统是华中科技大学网络空间安全学院《程序设计综合课程设计》课程的实践成果，旨在将计算机网络、数据结构、算法设计与 C++/Python
@@ -234,10 +234,13 @@
         </p>
 
         <div class="tip">
-            <strong>🆕 2.1 更新重点</strong>
+            <strong>🆕 2.2 更新重点</strong>
             <ul style="margin-top: 8px;">
-                <li><strong>MS Fluent 界面更新</strong>：主窗口升级为 MSFluentWindow，侧边导航、标题栏返回键、主页工作台与控件排版进一步统一。</li>
-                <li><strong>工作台体验优化</strong>：开始分析入口现在更加突出，导入、导出和帮助入口更集中。</li>
+                <li><strong>常驻 C++ 后端会话</strong>：GUI 改为复用本地 session 后端，数据加载后可持续复用图模型，不再为每个任务重新启动进程和全量建图。</li>
+                <li><strong>图模型加载一次、多任务复用</strong>：CSV 建图、索引预热、邻居分析与基础统计缓存会在加载阶段完成，后续分析任务直接复用会话内状态。</li>
+                <li><strong>多线程分析链路重构</strong>：构图、索引预热，以及端口扫描、DDoS 目标、星型结构等只读任务进一步并行化，提升大数据集处理效率。</li>
+                <li><strong>全过程可观测进度</strong>：PCAP 解析、图模型加载、分析、JSON 导出与 HTML 渲染都具备更细粒度的阶段进度与日志输出。</li>
+                <li><strong>设置与体验修复</strong>：新增界面字体选择、GitHub 检查更新，并补齐空结果提示、日志 i18n、About 与设置页细节。</li>
             </ul>
         </div>
 
@@ -448,7 +451,7 @@
         </div>
         <div class="note">
             <strong>Q: 如何获取软件更新？</strong><br>
-            A: 版本 <code>2.1</code> 已完成 MS Fluent 界面、工作台布局、导航适配、本地化、可视化与异常检测等优化。后续更新将以 GitHub 仓库发布为准。
+            A: 版本 <code>2.2</code> 重点完成了常驻后端会话、图模型复用、多线程分析优化、阶段性进度可观测，以及设置页字体与 GitHub 检查更新等能力。后续更新将以 GitHub 仓库发布为准。
         </div>
 
         <h2>📋 10. 附录：数据格式参考</h2>
@@ -478,7 +481,7 @@
 
         <hr>
         <div class="footer">
-            ©2026 那，边。版权所有。 本手册最后更新于 2026年4月20日。
+            ©2026 那，边。版权所有。 本手册最后更新于 2026年4月22日。
         </div>
     </div>
 </body>

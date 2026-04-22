@@ -165,7 +165,8 @@ public:
 
     //按单向流量占比阈值outThreshold筛选节点
     //返回一个包含(节点IP地址,出流量占比)元组的列表，按照节点的总流量从大到小排序
-    [[nodiscard]] std::vector<std::tuple<IPAddress, long long, double> > sortTrafficByOutRatio(const double outThreshold) const {
+    [[nodiscard]] std::vector<std::tuple<IPAddress, long long, double> > sortTrafficByOutRatio(
+        const double outThreshold) const {
         std::vector<std::pair<const Vertex *, double> > ptrs;
         ptrs.reserve(vertices.size());
         for (const auto &vertex: vertices) {

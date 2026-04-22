@@ -9,7 +9,6 @@
 
 # include <algorithm>
 # include <functional>
-# include <cmath>
 # include <thread>
 # include <string>
 
@@ -99,16 +98,26 @@ class Graph {
     }
 
 public:
+    using ProgressCallback = std::function<void(const std::string &)>;
+
     // 默认构造函数返回一个空图
     Graph() = default;
 
     static unsigned int defaultThreadCount() {
         const unsigned int count = std::thread::hardware_concurrency();
-        return count == 0 ? 1 : std::min(4u, count);
+        return count == 0 ? 1 : count;
+    }
+
+    static unsigned int effectiveThreadCount(const unsigned int requested, const size_t workItems) {
+        if (workItems == 0) return 1;
+        const unsigned int desired = requested == 0 ? defaultThreadCount() : requested;
+        return std::max(1u, std::min(desired, static_cast<unsigned int>(workItems)));
     }
 
     // 基本查询接口
     [[nodiscard]] int getVertexCount() const { return verticesList.getVertexCount(); }
+
+    [[nodiscard]] size_t getEdgeCount() const;
 
     [[nodiscard]] int findVertexIndex(const IPAddress &ip) const { return verticesList.findVertexIndex(ip); }
 
@@ -116,6 +125,21 @@ public:
     [[nodiscard]] IPAddress getVertexIP(const int vertexIndex) const {
         checkIndex(vertexIndex);
         return verticesList.getIP(vertexIndex);
+    }
+
+    [[nodiscard]] long long getVertexInData(const int vertexIndex) const {
+        checkIndex(vertexIndex);
+        return verticesList.getTotalInData(vertexIndex);
+    }
+
+    [[nodiscard]] long long getVertexOutData(const int vertexIndex) const {
+        checkIndex(vertexIndex);
+        return verticesList.getTotalOutData(vertexIndex);
+    }
+
+    [[nodiscard]] long long getVertexHTTPSData(const int vertexIndex) const {
+        checkIndex(vertexIndex);
+        return verticesList.getTotalHTTPSData(vertexIndex);
     }
 
     //为节点列表预分配内存，转发给Vertices类的reserve方法
@@ -145,12 +169,18 @@ public:
     // 端口扫描攻击者检测
     // 端口扫描攻击者通常会对同一个IP的大量不同端口发送探测包，寻找开放的服务
     [[nodiscard]] std::set<PortScanner> detectPortScanners(int portThreshold = 20,
-        double outRatioThreshold = 0.8, long long minTraffic = 0) const;
+                                                           double outRatioThreshold = 0.8,
+                                                           long long minTraffic = 0,
+                                                           unsigned int numThreads = defaultThreadCount(),
+                                                           const ProgressCallback &progressCallback = {}) const;
 
     //DDoS攻击目标检测
     //DDoS攻击目标通常在短时间内的入流量极大，且同时与海量不同的IP通信
     [[nodiscard]] std::set<DDoSTarget> detectDDoSTargets(int sourceThreshold = 20,
-        long long inDataThreshold = 1LL << 30, double inRatioThreshold = 0.8) const;
+                                                         long long inDataThreshold = 1LL << 30,
+                                                         double inRatioThreshold = 0.8,
+                                                         unsigned int numThreads = defaultThreadCount(),
+                                                         const ProgressCallback &progressCallback = {}) const;
 
     //函数minCongestion用于寻找图中从a节点到b节点的最小拥塞路径
     //参数：起始节点a的IP地址、目标节点b的IP地址
@@ -187,7 +217,8 @@ public:
     //计算图中所有节点的邻居信息
     //返回值：一个包含邻居索引和邻居信息的字典列表
     [[nodiscard]] std::vector<std::unordered_map<int, NeighborInfo> > analyzeNeighbors(
-        unsigned int numThreads = defaultThreadCount())
+        unsigned int numThreads = defaultThreadCount(),
+        const ProgressCallback &progressCallback = {})
     const;
 
     //重载函数analyzeNeighbors，查找单个节点的邻居信息
@@ -198,7 +229,10 @@ public:
     //函数findStarStructures用于在图中寻找星型结构
     //参数：度数阈值degreeThreshold
     //返回值：包含所有星型结构的列表
-    [[nodiscard]] std::vector<StarStructure> findStarStructures(int degreeThreshold = 20) const;
+    [[nodiscard]] std::vector<StarStructure> findStarStructures(
+        int degreeThreshold = 20,
+        unsigned int numThreads = defaultThreadCount(),
+        const ProgressCallback &progressCallback = {}) const;
 
     //寻找指定节点的连通分量
     //支持传入预先计算的所有节点的邻居信息，避免重复计算
@@ -207,6 +241,9 @@ public:
 
     //寻找子图中所有互斥的连通分量
     [[nodiscard]] std::vector<ConnectedComponents> findAllComponents() const;
+
+    [[nodiscard]] std::vector<ConnectedComponents> findAllComponents(
+        const std::vector<std::unordered_map<int, NeighborInfo> > &allNeighbors) const;
 
     //将路径集合转换为ConnectedComponents对象
     [[nodiscard]] ConnectedComponents convertToConnectedComponents(const std::vector<PathInfo> &paths) const;

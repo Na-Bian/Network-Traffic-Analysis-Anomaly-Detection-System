@@ -7,10 +7,41 @@
 # include <future>
 # include <unordered_set>
 # include <queue>
-# include <fstream>
 # include <set>
 
 using namespace std;
+
+namespace {
+    vector<pair<int, int> > buildStaticRanges(const int itemCount, const unsigned int threadCount) {
+        vector<pair<int, int> > ranges;
+        if (itemCount <= 0 || threadCount == 0) {
+            return ranges;
+        }
+
+        ranges.reserve(threadCount);
+        const int base = itemCount / static_cast<int>(threadCount);
+        const int remainder = itemCount % static_cast<int>(threadCount);
+        int start = 0;
+        for (unsigned int index = 0; index < threadCount; ++index) {
+            const int items = static_cast<int>(index) < remainder ? base + 1 : base;
+            const int end = start + items - 1;
+            if (start > end) {
+                break;
+            }
+            ranges.emplace_back(start, end);
+            start = end + 1;
+        }
+        return ranges;
+    }
+}
+
+size_t Graph::getEdgeCount() const {
+    size_t edgeCount = 0;
+    for (int index = 0; index < verticesList.getVertexCount(); ++index) {
+        edgeCount += verticesList.getEdges(index).getAllEdgeIndices().size();
+    }
+    return edgeCount;
+}
 
 //获取所有节点按照总流量排序的列表
 vector<pair<IPAddress, long long> > Graph::getNodesSortedByTotalTraffic() const {
@@ -99,107 +130,195 @@ void Graph::mergeFrom(const Graph &other) {
 //端口扫描攻击者检测
 set<PortScanner> Graph::detectPortScanners(const int portThreshold,
                                            const double outRatioThreshold,
-                                           const long long minTraffic) const {
-    set<PortScanner> scanners;
+                                           const long long minTraffic,
+                                           const unsigned int numThreads,
+                                           const ProgressCallback &progressCallback) const {
     const int n = verticesList.getVertexCount();
+    const unsigned int threadCount = effectiveThreadCount(numThreads, n);
+    if (progressCallback) {
+        progressCallback(
+            "进度: 端口扫描检测开始，节点数=" + to_string(n) +
+            "，线程数=" + to_string(threadCount)
+        );
+    }
 
-    for (int i = 0; i < n; ++i) {
-        const long long inData = verticesList.getTotalInData(i);
-        const long long outData = verticesList.getTotalOutData(i);
-        const long long totalData = inData + outData;
-        if (totalData <= 0 || totalData < minTraffic) continue;
+    vector<future<vector<PortScanner> > > futures;
+    const auto ranges = buildStaticRanges(n, threadCount);
 
-        const double outRatio = static_cast<double>(outData) / static_cast<double>(totalData);
-        if (outRatio < outRatioThreshold) continue;
+    for (const auto &[start, end]: ranges) {
+        futures.push_back(std::async(std::launch::async,
+                                     [this, start, end, portThreshold, outRatioThreshold, minTraffic]() {
+                                         vector<PortScanner> localScanners;
+                                         localScanners.reserve(max(1, end - start + 1));
+                                         for (int i = start; i <= end; ++i) {
+                                             const long long inData = verticesList.getTotalInData(i);
+                                             const long long outData = verticesList.getTotalOutData(i);
+                                             const long long totalData = inData + outData;
+                                             if (totalData <= 0 || totalData < minTraffic) continue;
 
-        const auto &edges = verticesList.getEdges(i); // 获取当前节点的所有出边
-        int maxPortsToOneTarget = 0;
-        unordered_map<uint16_t, set<int> > targetsByDstPort;
+                                             const double outRatio =
+                                                     static_cast<double>(outData) / static_cast<double>(totalData);
+                                             if (outRatio < outRatioThreshold) continue;
 
-        for (const int edgeIdx: edges.getAllEdgeIndices()) {
-            const auto &edgeInfo = edges.getEdgeInfo(edgeIdx);
+                                             const auto &edges = verticesList.getEdges(i);
+                                             int maxPortsToOneTarget = 0;
+                                             unordered_map<uint16_t, int> targetsByDstPort;
 
-            // 对该节点与某个邻居节点之间的所有通信记录，统计不同目的端口的总数
-            set<uint16_t> uniqueDstPorts;
-            for (const auto &stats: edgeInfo.protocolStats | std::views::values) {
-                for (const auto &[srcPort, dstPort]: stats.ports) {
-                    uniqueDstPorts.insert(dstPort);
-                    targetsByDstPort[dstPort].insert(edgeInfo.dstIndex);
-                }
-            }
-            maxPortsToOneTarget = max(maxPortsToOneTarget, static_cast<int>(uniqueDstPorts.size()));
-        }
+                                             for (const int edgeIdx: edges.getAllEdgeIndices()) {
+                                                 const auto &edgeInfo = edges.getEdgeInfo(edgeIdx);
 
-        int maxTargetsForOnePort = 0;
-        for (const auto &[dstPort, targets]: targetsByDstPort) {
-            maxTargetsForOnePort = max(maxTargetsForOnePort, static_cast<int>(targets.size()));
-        }
+                                                 unordered_set<uint16_t> uniqueDstPorts;
+                                                 for (const auto &stats: edgeInfo.protocolStats | std::views::values) {
+                                                     for (const auto &[srcPort, dstPort]: stats.ports) {
+                                                         uniqueDstPorts.insert(dstPort);
+                                                     }
+                                                 }
+                                                 maxPortsToOneTarget = max(
+                                                     maxPortsToOneTarget, static_cast<int>(uniqueDstPorts.size()));
+                                                 for (const auto dstPort: uniqueDstPorts) {
+                                                     ++targetsByDstPort[dstPort];
+                                                 }
+                                             }
 
-        const bool verticalScan = maxPortsToOneTarget > portThreshold;
-        const bool horizontalScan = maxTargetsForOnePort > portThreshold;
-        if (verticalScan || horizontalScan) {
-            string scanType = "vertical";
-            if (verticalScan && horizontalScan) scanType = "mixed";
-            else if (horizontalScan) scanType = "horizontal";
-            scanners.insert({
-                verticesList.getIP(i),
-                maxPortsToOneTarget,
-                maxTargetsForOnePort,
-                scanType,
-                outRatio,
-                totalData
-            });
+                                             int maxTargetsForOnePort = 0;
+                                             for (const auto &[dstPort, targetCount]: targetsByDstPort) {
+                                                 maxTargetsForOnePort = max(maxTargetsForOnePort, targetCount);
+                                             }
+
+                                             const bool verticalScan = maxPortsToOneTarget > portThreshold;
+                                             const bool horizontalScan = maxTargetsForOnePort > portThreshold;
+                                             if (verticalScan || horizontalScan) {
+                                                 string scanType = "vertical";
+                                                 if (verticalScan && horizontalScan) scanType = "mixed";
+                                                 else if (horizontalScan) scanType = "horizontal";
+                                                 localScanners.push_back({
+                                                     verticesList.getIP(i),
+                                                     maxPortsToOneTarget,
+                                                     maxTargetsForOnePort,
+                                                     scanType,
+                                                     outRatio,
+                                                     totalData
+                                                 });
+                                             }
+                                         }
+                                         return localScanners;
+                                     }));
+    }
+
+    set<PortScanner> scanners;
+    for (auto &f: futures) {
+        const auto local = f.get();
+        for (const auto &scanner: local) {
+            scanners.insert(scanner);
         }
     }
+
+    if (progressCallback) {
+        progressCallback("进度: 端口扫描检测完成，命中 " + to_string(scanners.size()) + " 个节点");
+    }
+
     return scanners;
 }
 
 //DDoS攻击目标检测
 set<DDoSTarget> Graph::detectDDoSTargets(const int sourceThreshold,
                                          const long long inDataThreshold,
-                                         const double inRatioThreshold) const {
+                                         const double inRatioThreshold,
+                                         const unsigned int numThreads,
+                                         const ProgressCallback &progressCallback) const {
     set<DDoSTarget> targets;
     const int n = verticesList.getVertexCount();
-    vector<set<int> > incomingSources(n);
+    const unsigned int threadCount = effectiveThreadCount(numThreads, n);
+    if (progressCallback) {
+        progressCallback(
+            "进度: DDoS 目标检测开始，节点数=" + to_string(n) +
+            "，线程数=" + to_string(threadCount)
+        );
+    }
 
-    for (int i = 0; i < n; ++i) {
-        const auto &edges = verticesList.getEdges(i);
-        for (const int edgeIdx: edges.getAllEdgeIndices()) {
-            incomingSources[edges.getEdgeInfo(edgeIdx).dstIndex].insert(i);
+    vector<int> incomingCounts(n, 0);
+    vector<future<unordered_map<int, int> > > countFutures;
+    const auto ranges = buildStaticRanges(n, threadCount);
+    for (const auto &[start, end]: ranges) {
+        countFutures.push_back(std::async(std::launch::async, [this, start, end]() {
+            unordered_map<int, int> localCounts;
+            localCounts.reserve(max(16, (end - start + 1) * 2));
+            for (int src = start; src <= end; ++src) {
+                const auto &edges = verticesList.getEdges(src);
+                for (const int edgeIdx: edges.getAllEdgeIndices()) {
+                    ++localCounts[edges.getEdgeInfo(edgeIdx).dstIndex];
+                }
+            }
+            return localCounts;
+        }));
+    }
+    for (auto &future: countFutures) {
+        for (const auto &[dstIndex, count]: future.get()) {
+            incomingCounts[dstIndex] += count;
         }
     }
 
-    for (int i = 0; i < n; ++i) {
-        const long long inData = verticesList.getTotalInData(i);
-        const long long outData = verticesList.getTotalOutData(i);
-        const long long totalData = inData + outData;
-        if (totalData <= 0) continue;
+    if (progressCallback) progressCallback("进度: DDoS 入方向邻居统计完成，正在筛选目标...");
 
-        const int sourceCount = static_cast<int>(incomingSources[i].size());
-        const double inRatio = static_cast<double>(inData) / static_cast<double>(totalData);
-        if (inData > inDataThreshold && sourceCount > sourceThreshold && inRatio >= inRatioThreshold) {
-            targets.insert({verticesList.getIP(i), sourceCount, inData, inRatio});
-        }
+    vector<future<set<DDoSTarget> > > targetFutures;
+    for (const auto &[start, end]: ranges) {
+        targetFutures.push_back(std::async(std::launch::async, [this, start, end, sourceThreshold, inDataThreshold,
+                                               inRatioThreshold, &incomingCounts]() {
+                                               set<DDoSTarget> localTargets;
+                                               for (int i = start; i <= end; ++i) {
+                                                   const long long inData = verticesList.getTotalInData(i);
+                                                   const long long outData = verticesList.getTotalOutData(i);
+                                                   const long long totalData = inData + outData;
+                                                   if (totalData <= 0) continue;
+
+                                                   const int sourceCount = incomingCounts[i];
+                                                   const double inRatio =
+                                                           static_cast<double>(inData) / static_cast<double>(totalData);
+                                                   if (inData > inDataThreshold && sourceCount > sourceThreshold &&
+                                                       inRatio >= inRatioThreshold) {
+                                                       localTargets.insert({
+                                                           verticesList.getIP(i), sourceCount, inData, inRatio
+                                                       });
+                                                   }
+                                               }
+                                               return localTargets;
+                                           }));
+    }
+
+    for (auto &f: targetFutures) {
+        const auto local = f.get();
+        targets.insert(local.begin(), local.end());
+    }
+
+    if (progressCallback) {
+        progressCallback("进度: DDoS 目标检测完成，命中 " + to_string(targets.size()) + " 个节点");
     }
 
     return targets;
 }
 
 //分析图中所有节点的邻居信息
-vector<unordered_map<int, NeighborInfo> > Graph::analyzeNeighbors(const unsigned int numThreads) const {
+vector<unordered_map<int, NeighborInfo> > Graph::analyzeNeighbors(const unsigned int numThreads,
+                                                                  const ProgressCallback &progressCallback) const {
     const int n = verticesList.getVertexCount(); // 获取节点数量
-    const unsigned int threadCount = std::min({
-        numThreads == 0 ? 1u : numThreads,
-        defaultThreadCount(),
-        (std::max)(1u, static_cast<unsigned int>(n))
-    });
+    const unsigned int threadCount = effectiveThreadCount(numThreads, n);
+    if (progressCallback) {
+        progressCallback(
+            "进度: 邻居分析开始，节点数=" + to_string(n) +
+            "，线程数=" + to_string(threadCount)
+        );
+    }
     //创建一个列表用于存储每个节点的邻居信息，邻居信息以字典形式存储，
     //键为邻居节点索引，值为一个结构体，包含与邻居节点通信使用过的源端口号集合、目的端口号集合和总流量
     vector<unordered_map<int, NeighborInfo> > neighbors(n);
+    vector<vector<pair<int, int> > > incomingEdges(n);
 
-    // 使用互斥锁保护邻居信息列表，确保线程安全地更新邻居信息
-    vector<unique_ptr<mutex> > nodeMutexes(n);
-    for (int i = 0; i < n; ++i) nodeMutexes[i] = make_unique<mutex>();
+    for (int u = 0; u < n; ++u) {
+        const auto &edges = verticesList.getEdges(u);
+        for (const int edgeIdx: edges.getAllEdgeIndices()) {
+            incomingEdges[edges.getEdgeInfo(edgeIdx).dstIndex].emplace_back(u, edgeIdx);
+        }
+    }
 
     vector<future<void> > futures; // 存储线程的future对象
 
@@ -215,38 +334,21 @@ vector<unordered_map<int, NeighborInfo> > Graph::analyzeNeighbors(const unsigned
         start = end + 1;
         end = start + nodesToRead - 1;
         if (start > end) break;
-        futures.push_back(std::async(launch::async, [this, start, end, &neighbors, &nodeMutexes]() {
+        futures.push_back(std::async(launch::async, [this, start, end, &neighbors]() {
             //遍历从start到end范围内的每个节点索引u
             for (int u = start; u <= end; ++u) {
+                auto &neighborMap = neighbors[u];
                 const auto &edges = verticesList.getEdges(u); // 获取当前节点的边列表对象
                 //遍历当前节点的所有出边
                 for (const int edgeIdx: edges.getAllEdgeIndices()) {
                     // 获取当前边的信息
                     const auto &edgeInfo = edges.getEdgeInfo(edgeIdx);
                     const int v = edgeInfo.dstIndex;
-                    const long long dataSize = edgeInfo.totalDataSize;
-                    const auto &statsMap = edgeInfo.protocolStats; // 协议统计数据
-
-                    // 更新u的邻居信息
-                    {
-                        lock_guard lock(*nodeMutexes[u]); //给u的邻居信息加锁，确保线程安全地更新信息
-                        neighbors[u][v].InData += dataSize;
-                        for (const auto protocol: statsMap | std::views::keys) {
-                            const auto &stats = statsMap.at(protocol);
-                            for (const auto &[srcPort, dstPort]: stats.ports) {
-                                neighbors[u][v].ports.insert({protocol, srcPort, dstPort});
-                            }
-                        }
-                    }
-                    // 更新v的邻居信息
-                    {
-                        lock_guard lock(*nodeMutexes[v]); //给v的邻居信息加锁，确保线程安全地更新信息
-                        neighbors[v][u].OutData += dataSize;
-                        for (const auto protocol: statsMap | std::views::keys) {
-                            const auto &stats = statsMap.at(protocol);
-                            for (const auto &[srcPort, dstPort]: stats.ports) {
-                                neighbors[v][u].ports.insert({protocol, srcPort, dstPort});
-                            }
+                    auto &info = neighborMap[v];
+                    info.InData += edgeInfo.totalDataSize;
+                    for (const auto &[protocol, stats]: edgeInfo.protocolStats) {
+                        for (const auto &[srcPort, dstPort]: stats.ports) {
+                            info.ports.insert({protocol, srcPort, dstPort});
                         }
                     }
                 }
@@ -255,6 +357,35 @@ vector<unordered_map<int, NeighborInfo> > Graph::analyzeNeighbors(const unsigned
     }
 
     for (auto &f: futures) f.wait(); // 等待所有线程完成计算
+    if (progressCallback) progressCallback("进度: 邻居分析第一阶段完成（出边聚合）");
+    futures.clear();
+
+    start = 0;
+    end = -1;
+    for (int i = 0; i < static_cast<int>(threadCount); ++i) {
+        const int nodesToRead = i < remainder ? base + 1 : base;
+        start = end + 1;
+        end = start + nodesToRead - 1;
+        if (start > end) break;
+        futures.push_back(std::async(launch::async, [this, start, end, &neighbors, &incomingEdges]() {
+            for (int v = start; v <= end; ++v) {
+                auto &neighborMap = neighbors[v];
+                for (const auto &[srcIndex, edgeIdx]: incomingEdges[v]) {
+                    const auto edgeInfo = verticesList.getEdges(srcIndex).getEdgeInfo(edgeIdx);
+                    auto &info = neighborMap[srcIndex];
+                    info.OutData += edgeInfo.totalDataSize;
+                    for (const auto &[protocol, stats]: edgeInfo.protocolStats) {
+                        for (const auto &[srcPort, dstPort]: stats.ports) {
+                            info.ports.insert({protocol, srcPort, dstPort});
+                        }
+                    }
+                }
+            }
+        }));
+    }
+
+    for (auto &f: futures) f.wait();
+    if (progressCallback) progressCallback("进度: 邻居分析第二阶段完成（入边聚合）");
 
     return neighbors; // 返回每个节点的邻居信息列表
 }
@@ -304,40 +435,78 @@ unordered_map<int, NeighborInfo> Graph::analyzeNeighbors(const IPAddress &target
 }
 
 //查找星型结构
-vector<StarStructure> Graph::findStarStructures(const int degreeThreshold) const {
-    vector<StarStructure> starStructures; // 创建一个列表用于存储找到的星型结构
-    const auto neighbors = analyzeNeighbors(); // 获取图中每个节点的邻居信息列表
-    //遍历每个节点的邻居列表，寻找满足条件的星型结构
-    for (int i = 0; i < neighbors.size(); ++i) {
-        const auto &currNeighbors = neighbors[i];
-
-        const IPAddress centerNode = verticesList.getIP(i); // 中心节点的IP地址
-        const long long inData = verticesList.getTotalInData(i);
-        const long long outData = verticesList.getTotalOutData(i);
-        const long long totalData = inData + outData; // 中心节点与邻居节点之间的总流量
-        vector<pair<IPAddress, long long> > neighborIPs; // 存储满足条件的邻居节点的IP地址列表和与中心节点之间的流量
-
-        //检查邻居中叶子数是否超过度数阈值
-        int totalLeaves = 0;
-        for (const auto &[neighborIndex, info]: currNeighbors) {
-            if (neighbors[neighborIndex].size() == 1) {
-                // 叶子节点
-                totalLeaves++;
-                //流量
-                const long long leafData = info.InData + info.OutData;
-                // 将叶子邻居节点的IP地址添加到列表中
-                neighborIPs.emplace_back(verticesList.getIP(neighborIndex), leafData);
-            }
-        }
-
-        //如果叶子数超过度数阈值，则构建星型结构信息并添加到结果列表中
-        if (totalLeaves > degreeThreshold) {
-            const double leafRatio = currNeighbors.empty()
-                                         ? 0.0
-                                         : static_cast<double>(totalLeaves) / static_cast<double>(currNeighbors.size());
-            starStructures.push_back({centerNode, std::move(neighborIPs), totalData, inData, outData, leafRatio});
-        }
+vector<StarStructure> Graph::findStarStructures(const int degreeThreshold,
+                                                const unsigned int numThreads,
+                                                const ProgressCallback &progressCallback) const {
+    if (progressCallback) progressCallback("进度: 星型结构检测开始，正在构建邻居信息...");
+    const auto neighbors = analyzeNeighbors(numThreads, progressCallback); // 获取图中每个节点的邻居信息列表
+    const int n = static_cast<int>(neighbors.size());
+    const unsigned int threadCount = effectiveThreadCount(numThreads, n);
+    vector<char> isLeaf(n, false);
+    for (int i = 0; i < n; ++i) {
+        isLeaf[i] = neighbors[i].size() == 1;
     }
+    if (progressCallback) {
+        progressCallback(
+            "进度: 星型结构筛选开始，节点数=" + to_string(n) +
+            "，线程数=" + to_string(threadCount)
+        );
+    }
+
+    vector<future<vector<StarStructure> > > futures;
+    const auto ranges = buildStaticRanges(n, threadCount);
+    for (const auto &[start, end]: ranges) {
+        futures.push_back(std::async(std::launch::async, [this, start, end, degreeThreshold, &neighbors, &isLeaf]() {
+            vector<StarStructure> localStars;
+            localStars.reserve(max(1, (end - start + 1) / 8));
+            for (int i = start; i <= end; ++i) {
+                const auto &currNeighbors = neighbors[i];
+                if (currNeighbors.size() <= static_cast<size_t>(degreeThreshold)) {
+                    continue;
+                }
+
+                const IPAddress centerNode = verticesList.getIP(i); // 中心节点的IP地址
+                const long long inData = verticesList.getTotalInData(i);
+                const long long outData = verticesList.getTotalOutData(i);
+                const long long totalData = inData + outData; // 中心节点与邻居节点之间的总流量
+                vector<pair<IPAddress, long long> > neighborIPs;
+                neighborIPs.reserve(currNeighbors.size());
+
+                int totalLeaves = 0;
+                for (const auto &[neighborIndex, info]: currNeighbors) {
+                    if (isLeaf[neighborIndex]) {
+                        totalLeaves++;
+                        const long long leafData = info.InData + info.OutData;
+                        neighborIPs.emplace_back(verticesList.getIP(neighborIndex), leafData);
+                    }
+                }
+
+                if (totalLeaves > degreeThreshold) {
+                    const double leafRatio = currNeighbors.empty()
+                                                 ? 0.0
+                                                 : static_cast<double>(totalLeaves) /
+                                                   static_cast<double>(currNeighbors.size());
+                    localStars.push_back({centerNode, std::move(neighborIPs), totalData, inData, outData, leafRatio});
+                }
+            }
+            return localStars;
+        }));
+    }
+
+    vector<StarStructure> starStructures;
+    for (auto &f: futures) {
+        auto local = f.get();
+        starStructures.insert(
+            starStructures.end(),
+            make_move_iterator(local.begin()),
+            make_move_iterator(local.end())
+        );
+    }
+
+    if (progressCallback) {
+        progressCallback("进度: 星型结构检测完成，命中 " + to_string(starStructures.size()) + " 个中心节点");
+    }
+
     return starStructures; //返回找到的星型结构列表
 }
 
@@ -392,11 +561,15 @@ ConnectedComponents Graph::findConnectedComponents(
 
 //寻找子图中所有互斥的连通分量
 vector<ConnectedComponents> Graph::findAllComponents() const {
+    const auto allNeighbors = analyzeNeighbors(); // 计算所有节点的邻居信息
+    return findAllComponents(allNeighbors);
+}
+
+vector<ConnectedComponents> Graph::findAllComponents(
+    const vector<unordered_map<int, NeighborInfo> > &allNeighbors) const {
     const int nodeCount = verticesList.getVertexCount();
     vector<ConnectedComponents> results;
     vector visited(nodeCount, false); // 存储每个节点是否已访问过
-
-    const auto allNeighbors = analyzeNeighbors(); // 计算所有节点的邻居信息
 
     for (int i = 0; i < nodeCount; ++i) {
         // 当前节点未被访问过，是一个新的连通分量的起始节点
